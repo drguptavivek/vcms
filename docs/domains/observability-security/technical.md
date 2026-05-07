@@ -37,4 +37,6 @@ Audit logs are required for privilege-sensitive actions, including:
 
 ## Rate-Limit And Security Telemetry
 
-Rate-limit and security logs must include request ID, route/action, actor when available, source IP, decision outcome, policy name, and retry-after value when applicable.
+Rate-limit and security logs include request ID, route path, actor when available, source IP where available, decision outcome, privilege when available, and retry-after value for `429` responses.
+
+Application errors are written to `app_error_logs` with sanitized metadata. Raw SQL and secrets must not be exposed to users.

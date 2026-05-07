@@ -30,6 +30,7 @@ Update documentation whenever implementation changes behavior, workflows, archit
 - `domains/identity-access/`: users, authentication, roles, ReBAC, privilege registry, and PEC allocations.
 - `domains/master-data/`: teams and PEC master data.
 - `domains/observability-security/`: runtime logging, SQL errors, audit logs, rate limiting, and route security.
+- `domains/printer-templates/`: browser/PDF, ZPL, and EPL template configuration.
 
 ## Standards
 

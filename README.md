@@ -5,7 +5,7 @@ owner: engineering
 last_reviewed: 2026-05-07
 ---
 
-# Vision Centre  Management System
+# Vision Centre Management System
 
 Modern management application for outreach centres and Vision Centres/Primary Eye Care Centres (PECs).
 
@@ -14,7 +14,7 @@ Modern management application for outreach centres and Vision Centres/Primary Ey
 In its first implementation, the system generates unique barcode stickers for pre-printed OPD cards. Staff can paste pre-printed stickers on OPD cards, manually write patient demographics, and later scan the barcode for follow-up workflows. Patient linkage is planned as a future phase.
 
 Later on the plan is to expand to include and support offline-first patient registration data capture and medical records and track patients over time including FHIR compliant bundle generation as per ABDM norms.
- 
+
 ## Barcode Format
 
 ```text
@@ -66,11 +66,39 @@ Example:
 
 ```text
 .plans/             Dated, folder-wise plans and implementation statuses
-docs/technical/     Technical documentation
-docs/user/          User-facing documentation
-src/                Application source once scaffolded
+docs/domains/       Domain/blueprint documentation
+docs/standards/     Cross-cutting engineering standards
+docs/user/          User-facing documentation indexes
+src/                SvelteKit application source
+```
+
+## Local Development
+
+```powershell
+npm install
+npm run db:start
+npm run db:push
+npm run seed
+npm run dev
+```
+
+Open `http://localhost:5173` and sign in with the local development account:
+
+```text
+admin@example.test / ChangeMe123!
+```
+
+The local development account uses a placeholder `.env` fallback login. Replace this before production deployment.
+
+## Validation
+
+```powershell
+npm run lint
+npm run check
+npm run test:unit -- --run
+npm run build
 ```
 
 ## Current Status
 
-Planning and repository setup phase.
+Working SvelteKit application scaffold with PostgreSQL, Drizzle schema, seeded PEC data, admin login fallback for local development, barcode batch generation, ZPL/EPL/browser output, ReBAC checks, rate limiting, audit logging, and initial tests.

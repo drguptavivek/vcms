@@ -13,4 +13,5 @@ This domain covers teams and PEC/Vision Centre master records.
 
 ## Documents
 
+- `api.md`: team and PEC API routes.
 - `technical.md`: master data rules and seed data.

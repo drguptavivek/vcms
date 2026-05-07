@@ -15,6 +15,7 @@ This directory is retained as a legacy technical index. New technical documentat
 - `../domains/identity-access/index.md`: users, authentication, roles, ReBAC, privilege registry, and PEC allocations.
 - `../domains/master-data/index.md`: teams and PEC master data.
 - `../domains/observability-security/index.md`: runtime logging, SQL errors, audit logs, rate limiting, and route security.
+- `../domains/printer-templates/index.md`: browser/PDF, ZPL, and EPL template configuration.
 
 ## Current Standards
 

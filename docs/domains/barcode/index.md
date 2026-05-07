@@ -13,6 +13,7 @@ This domain covers barcode series, allocation, printing, reprinting, offline res
 
 ## Documents
 
+- `api.md`: barcode API routes and payloads.
 - `technical.md`: barcode lifecycle and business rules.
 - `printing.md`: browser/PDF, ZPL, and EPL output.
 - `user-guide.md`: barcode print manager workflows.

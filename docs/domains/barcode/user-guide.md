@@ -20,3 +20,14 @@ They can:
 - manually set/reset the next serial number
 
 All sensitive actions require a reason and are audit-logged.
+
+## Local Workflow
+
+1. Sign in.
+2. Open `Print Barcodes`.
+3. Select PEC, year, quantity, template, and output mode.
+4. Generate the batch.
+5. For browser/PDF output, use browser print.
+6. For ZPL/EPL output, copy the generated printer language payload to the printer integration.
+7. Use `Batches` to reprint failed batches without consuming new serials.
+8. Use `Reserve Offline` to skip barcodes issued outside the system.

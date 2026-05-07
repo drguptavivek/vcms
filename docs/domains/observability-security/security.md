@@ -24,3 +24,10 @@ Every API route must explicitly define and enforce:
 Every new or changed route requires a dedicated Spark security-audit subagent before commit.
 
 The security-audit subagent must verify validation, authentication, authorization, resource scope, rate limiting, audit logs, sanitized errors, safe logging, and relevant tests.
+
+## Current Route Security Implementation
+
+- API routes use the shared `withApiHandler` wrapper.
+- The wrapper applies request ID propagation, JSON parsing, Zod validation, authentication, optional ReBAC authorization, rate limiting, safe error envelopes, and structured error logging.
+- Sensitive barcode, user-management, and printer-template mutations use stricter rate-limit policies.
+- Privilege-sensitive services write audit logs with action, actor, resource, reason where applicable, and before/after data where available.

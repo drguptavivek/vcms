@@ -26,7 +26,7 @@ Example:
 - Batch reprinted.
 - Offline range reserved/skipped.
 - Next serial manually reset.
-- Series locked or unlocked.
+- Series lock state viewed. Lock/unlock is represented in the data model but not yet exposed as a user workflow.
 
 ## Allocation Rules
 

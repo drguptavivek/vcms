@@ -13,5 +13,6 @@ This domain covers users, authentication, roles, PEC allocations, ReBAC authoriz
 
 ## Documents
 
+- `api.md`: user, role, PEC allocation, and local login API/workflow notes.
 - `technical.md`: authorization and relationship model.
 - `user-guide.md`: admin-facing access management workflows.

@@ -16,6 +16,6 @@ Admins manage:
 - users
 - roles
 - PEC allocations for barcode print managers
-- series locks when needed
+- PEC and team master data
 
 Admins do not need to perform routine barcode printing unless also assigned the relevant barcode privileges.

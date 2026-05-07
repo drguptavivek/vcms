@@ -1,0 +1,76 @@
+[privileges."team.manage"]
+description = "Manage team master data"
+roles = ["admin"]
+resource = "system"
+audit = true
+
+[privileges."pec.manage"]
+description = "Manage PEC master data"
+roles = ["admin"]
+resource = "system"
+audit = true
+
+[privileges."pec.view"]
+description = "View PEC master data within allowed scope"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
+[privileges."team.view"]
+description = "View team master data within allowed scope"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
+[privileges."user.manage"]
+description = "Manage users, roles, and PEC allocations"
+roles = ["admin"]
+resource = "system"
+audit = true
+
+[privileges."barcode.series.view"]
+description = "View barcode series next serials"
+roles = ["admin", "barcode_print_manager"]
+resource = "pec"
+relationship = "allocated_pec"
+audit = false
+
+[privileges."barcode.batch.view"]
+description = "View barcode batches within allowed scope"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
+[privileges."barcode.batch.print"]
+description = "Print next barcode range"
+roles = ["admin", "barcode_print_manager"]
+resource = "pec"
+relationship = "allocated_pec"
+audit = true
+
+[privileges."barcode.batch.reprint"]
+description = "Reprint an existing barcode batch"
+roles = ["admin", "barcode_print_manager"]
+resource = "pec"
+relationship = "allocated_pec"
+audit = true
+
+[privileges."barcode.sequence.reset"]
+description = "Set next serial for PEC-year"
+roles = ["admin", "barcode_print_manager"]
+resource = "pec"
+relationship = "allocated_pec"
+audit = true
+
+[privileges."barcode.range.reserve_offline"]
+description = "Reserve offline-issued barcode range"
+roles = ["admin", "barcode_print_manager"]
+resource = "pec"
+relationship = "allocated_pec"
+audit = true
+
+[privileges."printer_template.manage"]
+description = "Manage printer templates"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = true

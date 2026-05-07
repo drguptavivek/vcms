@@ -13,7 +13,17 @@ This directory contains operational guides for application users.
 
 - `../domains/identity-access/user-guide.md`: manage users, roles, and allocations.
 - `../domains/barcode/user-guide.md`: generate, reprint, reserve, and reset barcode sequences.
-- `printer-template-guide.md`: configure browser/PDF, ZPL, and EPL label templates.
+- `../domains/printer-templates/user-guide.md`: configure browser/PDF, ZPL, and EPL label templates.
+
+## Local Development Access
+
+The seeded development account is:
+
+```text
+admin@example.test / ChangeMe123!
+```
+
+This account is for local development only.
 
 ## Maintenance Rules
 

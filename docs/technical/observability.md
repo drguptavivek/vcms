@@ -49,3 +49,5 @@ Rate-limit and security logs must include:
 - authorization policy or privilege name when applicable
 
 Blocked requests must be logged without exposing secrets, passwords, session tokens, raw SQL, or full request payloads.
+
+The API handler writes sanitized failures to `app_error_logs` and returns `Retry-After` headers for rate-limit responses.
