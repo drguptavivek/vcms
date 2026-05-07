@@ -18,8 +18,21 @@ They can:
 - print previous ranges again
 - print one barcode from a previous range
 - save a Manual PEC Code Skip from a PEC row
-- manually set/reset the next serial number
 
 All sensitive actions require a reason and are audit-logged.
 
-Use `Print Barcodes` as the main dashboard. Search by PEC, confirm the selected barcode year, then use the action controls against the relevant PEC. Generate, PEC range reprint, Recent Print Run range reprint, and Print One all open a confirmation row before printer output is created. Only admins can change the dashboard barcode year, and that selected year applies to all PEC rows. Use `Manual PEC Code Skip` when serials were manually issued, damaged, lost, or otherwise should not be generated again.
+Use `Print Barcodes` as the main dashboard. Search by PEC, then use the action controls against the relevant PEC. Generate, PEC range reprint, Recent Print Run range reprint, and Print One all open a confirmation row before printer output is created. Only admins can use `Change Years` to update the saved operational barcode year for all PECs or set/reset next serials. Use `Manual PEC Code Skip` when serials were manually issued, damaged, lost, or otherwise should not be generated again.
+
+## Barcode Rules
+
+- Format: `PP-YY-SSSSSS`.
+- `PP`: 2-digit PEC code.
+- `YY`: manual operational barcode year.
+- `SSSSSS`: 6-digit serial.
+- Example: PEC `4`, year `26`, serial `1` -> `04-26-000001`.
+- Browser/PDF, ZPL, and EPL must use the same barcode value.
+- Output must include machine-readable barcode and human-readable text.
+- Barcode year is an operational DB setting, not calendar-derived.
+- Series reset is manual and privileged.
+- Use transactions and row-level locking for allocation.
+- Never generate duplicate barcode values.

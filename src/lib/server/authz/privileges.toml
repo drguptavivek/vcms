@@ -57,9 +57,15 @@ audit = true
 
 [privileges."barcode.sequence.reset"]
 description = "Set next serial for PEC-year"
-roles = ["admin", "barcode_print_manager"]
+roles = ["admin"]
 resource = "pec"
 relationship = "allocated_pec"
+audit = true
+
+[privileges."settings.barcode_year.update"]
+description = "Change the global operational barcode year"
+roles = ["admin"]
+resource = "system"
 audit = true
 
 [privileges."barcode.range.reserve_offline"]

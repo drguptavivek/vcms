@@ -26,6 +26,8 @@ Example:
 - Batch reprinted.
 - Single barcode reprinted.
 - Manual PEC Code Skip saved.
+- The current operational barcode year is stored in `mas_settings` as `barcode.current_year`.
+- Admins change the operational barcode year manually; it must not automatically roll over on January 1.
 - Next serial manually reset.
 - Series lock state viewed. Lock/unlock is represented in the data model but not yet exposed as a user workflow.
 

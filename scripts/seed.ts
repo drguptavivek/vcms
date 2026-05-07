@@ -8,7 +8,8 @@ import {
 	user,
 	userRoles,
 	userPecAllocations,
-	printerTemplates
+	printerTemplates,
+	masSettings
 } from '../src/lib/server/db/schema.ts';
 import { databaseUrlFromEnv } from '../src/lib/server/db/connection.ts';
 
@@ -54,6 +55,8 @@ async function upsertRole(name: string, description: string) {
 }
 
 async function main() {
+	const currentBarcodeYear = new Date().getFullYear() % 100;
+
 	for (const code of [1, 2, 3, 4, 5]) {
 		await db
 			.insert(teams)
@@ -142,6 +145,16 @@ async function main() {
 				createdBy: 'dev-admin'
 			}
 		])
+		.onConflictDoNothing();
+
+	await db
+		.insert(masSettings)
+		.values({
+			key: 'barcode.current_year',
+			value: String(currentBarcodeYear),
+			description: 'Current operational barcode year YY used by the print dashboard',
+			updatedBy: 'dev-admin'
+		})
 		.onConflictDoNothing();
 
 	console.log('Seed complete. Local login: admin@example.test / ChangeMe123!');

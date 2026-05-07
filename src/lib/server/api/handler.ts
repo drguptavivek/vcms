@@ -77,16 +77,15 @@ export async function withApiHandler<TSchema extends z.ZodTypeAny, TResult>(
 					details: undefined,
 					headers: undefined
 				};
-		logger.error(
-			{
-				requestId,
-				code: appError.code,
-				status: appError.status,
-				details: appError.details,
-				err: error instanceof Error ? { name: error.name, message: error.message } : undefined
-			},
-			'API request failed'
-		);
+		const logPayload = {
+			requestId,
+			code: appError.code,
+			status: appError.status,
+			details: appError.details,
+			err: error instanceof Error ? { name: error.name, message: error.message } : undefined
+		};
+		if (appError.status >= 500) logger.error(logPayload, 'API request failed');
+		else logger.warn(logPayload, 'API request rejected');
 		if (options.privilege && event.locals.user) {
 			await writeAudit(db, {
 				requestId,

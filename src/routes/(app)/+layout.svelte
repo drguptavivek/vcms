@@ -9,9 +9,12 @@
 	const barcodeLinks = [
 		{ path: '/barcode', label: 'Barcode Printing Dashboard', icon: 'barcode' },
 		{ path: '/barcode/batches', label: 'Print Runs', icon: 'history' },
-		{ path: '/barcode/sequences', label: 'Sequences', icon: 'database' },
-		{ path: '/barcode/reserve-offline', label: 'Manual PEC Code Skip', icon: 'skip' },
 		{ path: '/printer-templates', label: 'Printer Templates', icon: 'settings' }
+	] as const;
+
+	const adminBarcodeLinks = [
+		...barcodeLinks,
+		{ path: '/barcode/sequences', label: 'Change Years', icon: 'database' }
 	] as const;
 
 	const adminLinks = [
@@ -36,7 +39,13 @@
 		section === 'barcodes' ? 'Barcodes' : section === 'admin' ? 'Admin' : 'Overview'
 	);
 	const sectionLinks = $derived(
-		section === 'barcodes' ? barcodeLinks : section === 'admin' ? adminLinks : overviewLinks
+		section === 'barcodes'
+			? data.isAdmin
+				? adminBarcodeLinks
+				: barcodeLinks
+			: section === 'admin'
+				? adminLinks
+				: overviewLinks
 	);
 
 	function isActive(path: string) {

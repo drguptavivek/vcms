@@ -82,12 +82,24 @@ The dashboard presents these records as print runs with start serial, end serial
 
 Returns current PEC/year sequence state visible to the signed-in user.
 
+## Barcode Year Setting
+
+`POST /api/v1/settings/barcode-year`
+
+- Privilege: `settings.barcode_year.update`
+- Rate limit: `sensitive`
+- Admin-only operation exposed as `Change Years`.
+- Stores the global operational barcode year in `mas_settings` under `barcode.current_year`.
+- Validation: year must be between the current calendar YY and current calendar YY + 10.
+- Rule: `/barcode` reads this saved setting for all PEC rows; it does not derive the operational year from January 1.
+
 ## Manual Reset
 
 `POST /api/v1/barcode/series/reset`
 
 - Privilege: `barcode.sequence.reset`
 - Rate limit: `sensitive`
+- Admin-only operation exposed as `Change Years`.
 - Requires a reason and creates an audit log.
 
 ## Manual PEC Code Skip

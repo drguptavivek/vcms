@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
 	import ReprintCodePanel from '$lib/components/barcode/ReprintCodePanel.svelte';
 
 	let { data } = $props();
@@ -113,7 +114,10 @@
 			},
 			'Failed to generate barcodes.'
 		);
-		if (responseData) pendingGenerate = null;
+		if (responseData) {
+			pendingGenerate = null;
+			await invalidateAll();
+		}
 	}
 
 	async function reprintPecRange(input: {
@@ -187,8 +191,9 @@
 			responseData = null;
 			closeReserveOffline();
 			message = messagePec
-				? `Manual PEC code skip saved: ${barcodeValue(messagePec.code, startSerial)} to ${barcodeValue(messagePec.code, endSerial)} skipped. Refresh to see updated next barcode.`
-				: 'Manual PEC code skip saved. Refresh to see updated next barcode.';
+				? `Manual PEC code skip saved: ${barcodeValue(messagePec.code, startSerial)} to ${barcodeValue(messagePec.code, endSerial)} skipped.`
+				: 'Manual PEC code skip saved.';
+			await invalidateAll();
 		}
 	}
 
@@ -250,40 +255,28 @@
 <h1>Barcode Printing Dashboard</h1>
 
 <section class="card">
-	<form class="grid" method="GET">
-		{#if data.isAdmin}
-			<label
-				>Dashboard Barcode Year YY
-				<input name="year" type="number" min="0" max="99" value={data.year} /></label
-			>
-		{:else}
-			<label
-				>Dashboard Barcode Year YY
-				<input value={String(data.year).padStart(2, '0')} readonly /></label
-			>
-		{/if}
-		<label>PEC Search <input bind:value={search} placeholder="PEC code or name" /></label>
-		<label
-			>Template <select bind:value={selectedTemplateId}
-				><option value="">Default</option>{#each data.templates as template (template.id)}<option
-						value={template.id}>{template.name}</option
-					>{/each}</select
-			></label
-		>
-		<label
-			>Output <select bind:value={selectedOutput}
-				><option value="html_pdf">Browser/PDF</option><option value="zpl">ZPL</option><option
-					value="epl">EPL</option
-				></select
-			></label
-		>
-		{#if data.isAdmin}
-			<button type="submit">Change Year For All PECs</button>
-		{:else}
-			<p class="muted">
-				Only admins can change the dashboard year. The selected year applies to all PECs.
-			</p>
-		{/if}
+	<form class="filter-grid" method="GET">
+		<label class="filter-control">
+			<span>PEC Search</span>
+			<input bind:value={search} placeholder="PEC code or name" />
+		</label>
+		<label class="filter-control">
+			<span>Template</span>
+			<select bind:value={selectedTemplateId}>
+				<option value="">Default</option>
+				{#each data.templates as template (template.id)}
+					<option value={template.id}>{template.name}</option>
+				{/each}
+			</select>
+		</label>
+		<label class="filter-control">
+			<span>Output</span>
+			<select bind:value={selectedOutput}>
+				<option value="html_pdf">Browser/PDF</option>
+				<option value="zpl">ZPL</option>
+				<option value="epl">EPL</option>
+			</select>
+		</label>
 	</form>
 	{#if message}<p
 			class={message.includes('failed') || message.includes('Failed') ? 'error' : 'success'}
@@ -299,8 +292,8 @@
 			<tr>
 				<th>PEC</th>
 				<th>Year</th>
-				<th>Last Generated Barcode</th>
-				<th>Next Barcode</th>
+				<th>Last</th>
+				<th>Next</th>
 				<th>Generate</th>
 				<th>Reprint</th>
 				<th>Manual PEC Code Skip</th>
@@ -597,6 +590,27 @@
 </section>
 
 <style>
+	.filter-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(12rem, 1fr));
+		gap: 0.8rem;
+		align-items: end;
+	}
+	.filter-control {
+		display: grid;
+		grid-template-rows: 1.25rem 2.75rem;
+		gap: 0.3rem;
+		min-width: 0;
+	}
+	.filter-control span {
+		line-height: 1.25rem;
+	}
+	.filter-control input,
+	.filter-control select {
+		box-sizing: border-box;
+		width: 100%;
+		height: 2.75rem;
+	}
 	.inline-form {
 		display: flex;
 		gap: 0.4rem;
@@ -721,5 +735,10 @@
 	textarea {
 		width: 100%;
 		font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+	}
+	@media (max-width: 760px) {
+		.filter-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

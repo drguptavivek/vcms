@@ -24,6 +24,15 @@ export const rangeStatus = pgEnum('barcode_range_status', [
 export const printerType = pgEnum('printer_type', ['html_pdf', 'zpl', 'epl']);
 export const auditOutcome = pgEnum('audit_outcome', ['success', 'failure']);
 
+export const masSettings = pgTable('mas_settings', {
+	key: text('key').primaryKey(),
+	value: text('value').notNull(),
+	description: text('description').notNull().default(''),
+	updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+	createdAt: timestamp('created_at').notNull().defaultNow(),
+	updatedAt: timestamp('updated_at').notNull().defaultNow()
+});
+
 export const teams = pgTable('teams', {
 	id: serial('id').primaryKey(),
 	code: integer('code').notNull().unique(),

@@ -19,7 +19,6 @@ They can:
 - print a previous print run again
 - print one barcode from a previous range
 - save a Manual PEC Code Skip from the PEC row
-- manually set/reset the next serial number
 
 All sensitive actions require a reason and are audit-logged.
 
@@ -27,7 +26,7 @@ All sensitive actions require a reason and are audit-logged.
 
 1. Sign in.
 2. Open `Print Barcodes`.
-3. Select barcode year if you are an admin, then choose optional PEC search, template, and output mode.
+3. Choose optional PEC search, template, and output mode.
 4. Review each PEC row for last generated barcode and next barcode.
 5. Enter a quantity against the PEC row and generate the next barcode range.
 6. Use `Manual PEC Code Skip` on the PEC row when serials were manually issued, damaged, lost, or otherwise should be skipped.
@@ -37,3 +36,5 @@ All sensitive actions require a reason and are audit-logged.
 10. Review the live formatted barcode preview before clicking `Print Range` or `Print Single`.
 
 The visible “print run” record is operationally a start serial, end serial, and quantity. The system stores an internal batch identifier so audits and reprints can point to the exact original print event.
+
+Admins use `Change Years` to update the saved operational barcode year for all PECs. This year is changed when operations roll over, which may be in March or April, not automatically in January.
