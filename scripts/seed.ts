@@ -10,10 +10,15 @@ import {
 	userPecAllocations,
 	printerTemplates
 } from '../src/lib/server/db/schema.ts';
+import { databaseUrlFromEnv } from '../src/lib/server/db/connection.ts';
 
-const databaseUrl =
-	process.env.DATABASE_URL ?? 'postgres://root:mysecretpassword@localhost:5432/local';
-const client = postgres(databaseUrl, { max: 1 });
+try {
+	process.loadEnvFile?.();
+} catch (error) {
+	if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+}
+
+const client = postgres(databaseUrlFromEnv(process.env), { max: 1 });
 const db = drizzle(client);
 
 const seedPecs = [

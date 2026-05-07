@@ -1,11 +1,16 @@
 import { defineConfig } from 'drizzle-kit';
+import { databaseUrlFromEnv } from './src/lib/server/db/connection';
 
-if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+try {
+	process.loadEnvFile?.();
+} catch (error) {
+	if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+}
 
 export default defineConfig({
 	schema: './src/lib/server/db/schema.ts',
 	dialect: 'postgresql',
-	dbCredentials: { url: process.env.DATABASE_URL },
+	dbCredentials: { url: databaseUrlFromEnv(process.env) },
 	verbose: true,
 	strict: true
 });

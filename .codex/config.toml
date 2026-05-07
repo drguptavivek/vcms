@@ -1,3 +1,16 @@
+[features]
+apps = false
+plugins = false
+
 [mcp_servers.svelte]
 command = "npx"
 args = ["-y", "@sveltejs/mcp"]
+
+[mcp_servers.stata]
+enabled = false
+
+[mcp_servers.r-studio]
+enabled = false
+
+[plugins."google-drive@openai-curated"]
+enabled = false

@@ -74,6 +74,18 @@ src/                SvelteKit application source
 
 ## Local Development
 
+Database configuration is component-based in `.env`:
+
+```powershell
+DB_HOST="localhost"
+DB_PORT="5400"
+DB_NAME="local"
+DB_USER="root"
+DB_PASSWORD="mysecretpassword"
+```
+
+Docker Compose uses `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. Drizzle, the app runtime, and the seed script build their PostgreSQL connection URL from the same values.
+
 ```powershell
 npm install
 npm run db:start
@@ -82,7 +94,7 @@ npm run seed
 npm run dev
 ```
 
-The repository includes both `compose.yaml` and `docker-compose.yml`; either Docker Compose filename can be used.
+The repository includes `compose.yaml` for local PostgreSQL.
 
 Open `http://localhost:5173` and sign in with the local development account:
 
@@ -100,6 +112,16 @@ npm run check
 npm run test:unit -- --run
 npm run build
 ```
+
+## Dependency Maintenance
+
+```powershell
+npm run deps:check
+npm run deps:update
+npm run sbom
+```
+
+`deps:check` uses a short cooldown before proposing newly published package versions and filters updates through package peer dependency constraints. `sbom` writes a reproducible CycloneDX JSON SBOM to `generated/sbom.cdx.json`.
 
 ## Current Status
 

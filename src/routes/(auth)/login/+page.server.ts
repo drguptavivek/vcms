@@ -1,6 +1,5 @@
 import { fail, redirect, isRedirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { APIError } from 'better-auth/api';
 import { auth } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/schema';
@@ -9,6 +8,28 @@ import { devAdminCredentials } from '$lib/server/auth/dev-settings';
 import { signDevUserId } from '$lib/server/auth/dev-session';
 import { enforceRateLimit, rateLimitPolicies } from '$lib/server/api/rate-limit';
 import { isAppError } from '$lib/server/observability/errors';
+
+type BetterAuthApiError = {
+	name: 'APIError';
+	message?: string;
+	statusCode?: number;
+	body?: {
+		message?: string;
+	};
+};
+
+function isBetterAuthApiError(error: unknown): error is BetterAuthApiError {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'name' in error &&
+		(error as { name?: unknown }).name === 'APIError'
+	);
+}
+
+function betterAuthApiErrorMessage(error: BetterAuthApiError): string {
+	return error.message || error.body?.message || 'Authentication failed.';
+}
 
 export const load: PageServerLoad = (event) => {
 	if (event.locals.user) redirect(302, '/dashboard');
@@ -52,7 +73,9 @@ export const actions: Actions = {
 		} catch (error) {
 			if (isRedirect(error)) throw error;
 			if (isAppError(error)) return fail(error.status, { message: error.message });
-			if (error instanceof APIError) return fail(400, { message: error.message });
+			if (isBetterAuthApiError(error)) {
+				return fail(error.statusCode ?? 400, { message: betterAuthApiErrorMessage(error) });
+			}
 			return fail(500, { message: 'Unexpected login error.' });
 		}
 
