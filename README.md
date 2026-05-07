@@ -82,6 +82,8 @@ npm run seed
 npm run dev
 ```
 
+The repository includes both `compose.yaml` and `docker-compose.yml`; either Docker Compose filename can be used.
+
 Open `http://localhost:5173` and sign in with the local development account:
 
 ```text

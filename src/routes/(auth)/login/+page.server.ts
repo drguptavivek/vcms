@@ -1,4 +1,4 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, redirect, isRedirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { APIError } from 'better-auth/api';
 import { auth } from '$lib/server/auth';
@@ -50,6 +50,7 @@ export const actions: Actions = {
 				headers: event.request.headers
 			});
 		} catch (error) {
+			if (isRedirect(error)) throw error;
 			if (isAppError(error)) return fail(error.status, { message: error.message });
 			if (error instanceof APIError) return fail(400, { message: error.message });
 			return fail(500, { message: 'Unexpected login error.' });
