@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# SvelteKit / Vite
+.svelte-kit/
+build/
+dist/
+.vite/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# Database / local data
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+
+# Generated files
+generated/
+tmp/
+temp/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
