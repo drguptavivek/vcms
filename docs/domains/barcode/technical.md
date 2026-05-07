@@ -24,7 +24,8 @@ Example:
 - Series started.
 - Batch printed.
 - Batch reprinted.
-- Offline range reserved/skipped.
+- Single barcode reprinted.
+- Manual PEC Code Skip saved.
 - Next serial manually reset.
 - Series lock state viewed. Lock/unlock is represented in the data model but not yet exposed as a user workflow.
 
@@ -34,4 +35,13 @@ Example:
 - The relevant PEC-year series row must be locked before reading or updating `next_serial`.
 - Printed and reserved ranges must not overlap.
 - Reprint uses existing ranges and never consumes new serials.
+- Single barcode reprint must verify that the requested serial belongs to the original print range.
+- The PEC dashboard is scoped to PECs allocated to the signed-in user.
+- Manual PEC Code Skip is a PEC-scoped mutation and must prevent overlaps before moving the next serial forward.
 - All lifecycle changes must be audit-logged.
+
+## Print Run Model
+
+Operators think in ranges: start serial, end serial, and quantity.
+
+The database still stores a batch record for every print, Manual PEC Code Skip, and reprint because it gives audit logs and reprint actions a stable source event.

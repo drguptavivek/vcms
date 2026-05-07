@@ -36,3 +36,22 @@ export const reprintBatchSchema = z.object({
 	output: z.enum(['html_pdf', 'zpl', 'epl']).default('html_pdf'),
 	reason: z.string().trim().min(3).max(500)
 });
+
+export const reprintSingleBarcodeSchema = reprintBatchSchema.extend({
+	serial: serialSchema
+});
+
+export const reprintPecRangeSchema = z
+	.object({
+		pecId: z.number().int().positive(),
+		year: yearSchema,
+		startSerial: serialSchema,
+		endSerial: serialSchema,
+		templateId: z.number().int().positive().optional(),
+		output: z.enum(['html_pdf', 'zpl', 'epl']).default('html_pdf'),
+		reason: z.string().trim().min(3).max(500)
+	})
+	.refine((value) => value.startSerial <= value.endSerial, {
+		message: 'Start serial must be less than or equal to end serial.',
+		path: ['endSerial']
+	});

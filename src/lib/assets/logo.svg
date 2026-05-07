@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+	<title id="title">Community Ophthalmology RPC logo</title>
+	<desc id="desc">Eye symbol inside a circular medical mark for the Vision Center Management System.</desc>
+	<defs>
+		<linearGradient id="teal" x1="18" x2="78" y1="18" y2="78" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#009b92" />
+			<stop offset="1" stop-color="#14345c" />
+		</linearGradient>
+	</defs>
+	<circle cx="48" cy="48" r="44" fill="#f6f9fb" stroke="#d89b2b" stroke-width="5" />
+	<path
+		fill="url(#teal)"
+		d="M14 49c8.5-14 20-21 34-21s25.5 7 34 21c-8.5 13.3-20 20-34 20S22.5 62.3 14 49Z"
+	/>
+	<circle cx="48" cy="49" r="16" fill="#fff" />
+	<circle cx="48" cy="49" r="8" fill="#14345c" />
+	<path fill="#d89b2b" d="M45 12h6v16h-6V12Zm0 56h6v16h-6V68ZM68 45h16v6H68V45ZM12 45h16v6H12v-6Z" />
+</svg>

@@ -33,3 +33,9 @@ Users can configure:
 - text size
 
 ZPL and EPL output must convert millimetres to printer dots using the selected DPI.
+
+## Reprint Consistency
+
+Full range reprint and single barcode reprint must render the exact same barcode value as the original print run across browser/PDF, ZPL, and EPL.
+
+Reprint actions only regenerate printer output. They do not allocate or advance serial numbers.

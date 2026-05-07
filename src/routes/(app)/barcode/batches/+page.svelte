@@ -22,7 +22,7 @@
 	}
 </script>
 
-<h1>Barcode Batches</h1>
+<h1>Barcode Print Runs</h1>
 {#if message}<p class="error">{message}</p>{/if}
 <section class="card">
 	<table>

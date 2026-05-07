@@ -6,7 +6,7 @@
 	<title>Dashboard | VCMS Barcode</title>
 </svelte:head>
 
-<h1>Barcode Dashboard</h1>
+<h1>Barcode Printing Dashboard</h1>
 <div class="stats">
 	<div class="card"><strong>{data.teams.length}</strong><span>Teams</span></div>
 	<div class="card"><strong>{data.pecs.length}</strong><span>PECs</span></div>

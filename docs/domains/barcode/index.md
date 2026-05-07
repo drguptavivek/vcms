@@ -9,7 +9,7 @@ last_reviewed: 2026-05-07
 
 ## Scope
 
-This domain covers barcode series, allocation, printing, reprinting, offline reservation, sequence reset, and barcode printer outputs.
+This domain covers the PEC-centric barcode printing dashboard, barcode series, allocation, printing, full-range reprinting, single-barcode reprinting, Manual PEC Code Skip, sequence reset, and barcode printer outputs.
 
 ## Documents
 

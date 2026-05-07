@@ -17,6 +17,7 @@ linked_plan: plan.md
 - PostgreSQL/Drizzle schema implemented and pushed to local Docker PostgreSQL.
 - Seed script implemented for teams, PECs, roles, admin user, allocations, and printer templates.
 - Initial tests implemented for barcode formatting, validation, printer output, and privilege registry.
+- Barcode printing workflow revised into a PEC-centric dashboard with inline generation, Manual PEC Code Skip, full-range reprint, and single-barcode reprint.
 
 ## Status By Area
 
@@ -29,6 +30,7 @@ linked_plan: plan.md
 | Auth/session             | Partial     | Better Auth scaffolded; local dev fallback login added for seeded admin account.             |
 | ReBAC/privilege registry | Complete    | TOML privilege registry and local ReBAC checks implemented.                                  |
 | Barcode services         | Complete    | Allocation, reprint, reset, reserve, formatting, and audit behavior implemented.             |
+| Barcode dashboard        | Complete    | PEC rows show last/next serial with inline generate, reserve, and reprint controls.          |
 | Printer outputs          | Complete    | Browser/SVG, ZPL, and EPL payload generation implemented.                                    |
 | Testing stack            | Planned     | Vitest, `@testing-library/svelte`, Playwright, PostgreSQL test DB, and V8 coverage selected. |
 | Svelte MCP               | Configured  | Project-local `.codex/config.toml` added for `@sveltejs/mcp`.                                |

@@ -12,7 +12,7 @@ This directory contains operational guides for application users.
 ## Planned Guides
 
 - `../domains/identity-access/user-guide.md`: manage users, roles, and allocations.
-- `../domains/barcode/user-guide.md`: generate, reprint, reserve, and reset barcode sequences.
+- `../domains/barcode/user-guide.md`: use the PEC printing dashboard to generate, reprint ranges, reprint one barcode, save Manual PEC Code Skips, and reset barcode sequences.
 - `../domains/printer-templates/user-guide.md`: configure browser/PDF, ZPL, and EPL label templates.
 
 ## Local Development Access

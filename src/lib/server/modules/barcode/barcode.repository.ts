@@ -54,6 +54,7 @@ export class BarcodeRepository {
 				year: barcodeBatches.year,
 				quantity: barcodeBatches.quantity,
 				reason: barcodeBatches.reason,
+				sourceBatchId: barcodeBatches.sourceBatchId,
 				createdAt: barcodeBatches.createdAt,
 				createdBy: barcodeBatches.createdBy
 			})
@@ -63,6 +64,29 @@ export class BarcodeRepository {
 			.limit(limit);
 		if (userPecIds?.length) return query.where(sql`${barcodeBatches.pecId} = any(${userPecIds})`);
 		return query;
+	}
+
+	listManualCodeSkips(year: number, userPecIds?: number[]) {
+		const filters = [eq(barcodeBatches.type, 'offline_reserve'), eq(barcodeBatches.year, year)];
+		if (userPecIds?.length) filters.push(sql`${barcodeBatches.pecId} = any(${userPecIds})`);
+		return this.database
+			.select({
+				id: barcodeBatches.id,
+				pecId: barcodeBatches.pecId,
+				pecCode: pecs.code,
+				pecName: pecs.name,
+				year: barcodeBatches.year,
+				quantity: barcodeBatches.quantity,
+				reason: barcodeBatches.reason,
+				createdAt: barcodeBatches.createdAt,
+				startSerial: barcodeRanges.startSerial,
+				endSerial: barcodeRanges.endSerial
+			})
+			.from(barcodeBatches)
+			.innerJoin(barcodeRanges, eq(barcodeRanges.batchId, barcodeBatches.id))
+			.innerJoin(pecs, eq(barcodeBatches.pecId, pecs.id))
+			.where(and(...filters))
+			.orderBy(desc(barcodeBatches.createdAt));
 	}
 
 	getBatch(batchId: string) {
@@ -90,6 +114,28 @@ export class BarcodeRepository {
 				)
 			)
 			.limit(1);
+	}
+
+	listRangesCovering(pecId: number, year: number, startSerial: number, endSerial: number) {
+		return this.database
+			.select({
+				id: barcodeRanges.id,
+				batchId: barcodeRanges.batchId,
+				startSerial: barcodeRanges.startSerial,
+				endSerial: barcodeRanges.endSerial,
+				status: barcodeRanges.status
+			})
+			.from(barcodeRanges)
+			.where(
+				and(
+					eq(barcodeRanges.pecId, pecId),
+					eq(barcodeRanges.year, year),
+					lte(barcodeRanges.startSerial, endSerial),
+					gte(barcodeRanges.endSerial, startSerial),
+					eq(barcodeRanges.status, 'printed')
+				)
+			)
+			.orderBy(barcodeRanges.startSerial);
 	}
 
 	transaction<T>(callback: Parameters<typeof db.transaction<T>>[0]) {

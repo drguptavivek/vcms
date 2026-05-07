@@ -16,15 +16,16 @@
 				reason: String(form.get('reason'))
 			})
 		});
-		if (response.ok) message = 'Offline range reserved.';
-		else message = (await response.json()).error?.message ?? 'Reserve failed.';
+		if (response.ok) message = 'Manual PEC code skip saved.';
+		else message = (await response.json()).error?.message ?? 'Manual PEC code skip failed.';
 	}
 </script>
 
-<h1>Reserve Offline Barcodes</h1>
+<h1>Manual PEC Code Skip</h1>
 <section class="card">
 	<p class="muted">
-		Use this when barcode numbers were issued offline and must be skipped by future print batches.
+		Use this when serial numbers for a PEC/year must be skipped because stickers were issued
+		manually, damaged, lost, or otherwise should not be generated again.
 	</p>
 	{#if message}<p>{message}</p>{/if}
 	<form class="grid" onsubmit={reserve}>
@@ -49,7 +50,7 @@
 			>Start Serial <input name="startSerial" type="number" min="1" max="999999" required /></label
 		>
 		<label>End Serial <input name="endSerial" type="number" min="1" max="999999" required /></label>
-		<label>Reason <input name="reason" value="Offline issued barcodes" required /></label>
-		<button type="submit">Reserve</button>
+		<label>Reason <input name="reason" value="Manual PEC code skip" required /></label>
+		<button type="submit">Save Manual PEC Code Skip</button>
 	</form>
 </section>

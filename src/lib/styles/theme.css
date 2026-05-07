@@ -1,0 +1,34 @@
+:root {
+	color-scheme: light;
+	--font-sans:
+		'Noto Sans Local', 'Nirmala UI', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system,
+		BlinkMacSystemFont, sans-serif;
+	--font-display: 'Noto Sans Local', 'Aptos Display', 'Segoe UI Variable Display', var(--font-sans);
+	--font-mono: 'Cascadia Code', 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+	--color-rpc-ink: #10202f;
+	--color-rpc-navy: #14345c;
+	--color-rpc-navy-hover: #0e2746;
+	--color-rpc-teal: #007c78;
+	--color-rpc-teal-dark: #005f5c;
+	--color-rpc-mint: #e8f7f5;
+	--color-rpc-mint-border: #92d8cf;
+	--color-rpc-gold: #d89b2b;
+	--color-rpc-sky: #eaf3ff;
+	--color-rpc-sky-ink: #245a99;
+	--color-rpc-sky-border: #b9d7fb;
+	--color-surface-page: #f6f9fb;
+	--color-surface-card: #ffffff;
+	--color-surface-subtle: color-mix(in oklab, var(--color-surface-page), white 38%);
+	--color-focus-ring: color-mix(in oklab, var(--color-rpc-teal), white 35%);
+	--color-text: var(--color-rpc-ink);
+	--color-text-muted: #66758a;
+	--color-border: #d9e2ec;
+	--color-border-strong: #bdcad8;
+	--color-danger: #b42318;
+	--shadow-card: 0 4px 16px rgb(16 32 47 / 6%);
+	--shadow-floating: -1rem 0 2rem rgb(16 32 47 / 18%);
+	--overlay-scrim: rgb(16 32 47 / 45%);
+	--radius-sm: 0.5rem;
+	--radius-md: 0.75rem;
+	--radius-lg: 0.85rem;
+}

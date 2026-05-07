@@ -26,7 +26,7 @@ Update documentation whenever implementation changes behavior, workflows, archit
 
 ## Domain Blueprints
 
-- `domains/barcode/`: barcode lifecycle, allocation, sequence reset, reprint, offline reservation, and printing.
+- `domains/barcode/`: PEC-centric print dashboard, barcode lifecycle, allocation, sequence reset, reprint, Manual PEC Code Skip, and printing.
 - `domains/identity-access/`: users, authentication, roles, ReBAC, privilege registry, and PEC allocations.
 - `domains/master-data/`: teams and PEC master data.
 - `domains/observability-security/`: runtime logging, SQL errors, audit logs, rate limiting, and route security.

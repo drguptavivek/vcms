@@ -22,6 +22,8 @@ This repository contains the Vision Centre Barcode Management System, a SvelteKi
 - Organize code service-first and module-first.
 - Use clean architecture boundaries.
 - Keep SvelteKit routes thin; routes must only handle transport concerns, request parsing, response shaping, and delegation.
+- Prefer reusable shared Svelte components for repeated UI workflows, panels, forms, confirmations, print previews, and validation hints.
+- Do not duplicate substantial Svelte markup across pages or sections when a shared component can express the workflow clearly.
 - Put business logic in services.
 - Put database access in repositories.
 - Put validation in shared Zod schemas.

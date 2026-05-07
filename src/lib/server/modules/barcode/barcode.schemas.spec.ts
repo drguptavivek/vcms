@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createBatchSchema, reserveOfflineSchema, resetSeriesSchema } from './barcode.schemas';
+import {
+	createBatchSchema,
+	reprintPecRangeSchema,
+	reprintSingleBarcodeSchema,
+	reserveOfflineSchema,
+	resetSeriesSchema
+} from './barcode.schemas';
 
 describe('barcode validation schemas', () => {
 	it('accepts valid print batch requests', () => {
@@ -25,5 +31,28 @@ describe('barcode validation schemas', () => {
 				reason: 'Offline issue'
 			})
 		).toThrow();
+	});
+
+	it('validates single barcode reprint requests', () => {
+		expect(
+			reprintSingleBarcodeSchema.parse({
+				serial: 42,
+				output: 'html_pdf',
+				reason: 'damaged sticker'
+			})
+		).toMatchObject({ serial: 42 });
+	});
+
+	it('validates PEC range reprint requests', () => {
+		expect(
+			reprintPecRangeSchema.parse({
+				pecId: 1,
+				year: 26,
+				startSerial: 10,
+				endSerial: 12,
+				output: 'zpl',
+				reason: 'print three damaged stickers'
+			})
+		).toMatchObject({ startSerial: 10, endSerial: 12 });
 	});
 });

@@ -4,6 +4,7 @@ import { barcodeBatches, barcodeRanges, barcodeSeries, pecs } from '$lib/server/
 import { getUserRoleNames } from '$lib/server/authz/authorize';
 import { conflict, notFound } from '$lib/server/observability/errors';
 import { writeAudit } from '$lib/server/observability/audit';
+import { masterDataService } from '$lib/server/modules/master-data/master-data.service';
 import { expandBarcodeRange, SERIAL_MAX } from './barcode.formatter';
 import { BarcodeRepository } from './barcode.repository';
 import { renderEpl } from './barcode.printers/epl';
@@ -24,6 +25,61 @@ const defaultTemplate: PrinterTemplateConfig = {
 export class BarcodeService {
 	constructor(private readonly repository = new BarcodeRepository()) {}
 
+	async listPrintDashboard(input: { userId: string; year: number }) {
+		const [pecRows, seriesRows, batchRows] = await Promise.all([
+			masterDataService.listPecs(input.userId),
+			this.listSeries(input.userId),
+			this.listBatches(input.userId)
+		]);
+		const seriesByPec = new Map(
+			seriesRows
+				.filter((series) => series.year === input.year)
+				.map((series) => [series.pecId, series])
+		);
+		const batchesByPec = new Map<number, number>();
+		const skipHistoryByPec = new Map<
+			number,
+			Array<{
+				id: string;
+				startSerial: number | null;
+				endSerial: number | null;
+				quantity: number;
+				reason: string;
+				createdAt: Date;
+			}>
+		>();
+		for (const batch of batchRows) {
+			if (batch.year !== input.year) continue;
+			if (batch.type === 'print')
+				batchesByPec.set(batch.pecId, (batchesByPec.get(batch.pecId) ?? 0) + 1);
+			if (batch.type === 'offline_reserve') {
+				const existing = skipHistoryByPec.get(batch.pecId) ?? [];
+				existing.push({
+					id: batch.id,
+					startSerial: batch.startSerial,
+					endSerial: batch.endSerial,
+					quantity: batch.quantity,
+					reason: batch.reason,
+					createdAt: batch.createdAt
+				});
+				skipHistoryByPec.set(batch.pecId, existing);
+			}
+		}
+		return pecRows.map((pec) => {
+			const series = seriesByPec.get(pec.id);
+			const nextSerial = series?.nextSerial ?? 1;
+			return {
+				...pec,
+				year: input.year,
+				nextSerial,
+				lastGeneratedSerial: Math.max(0, nextSerial - 1),
+				locked: series?.locked ?? false,
+				printBatchCount: batchesByPec.get(pec.id) ?? 0,
+				codeSkipHistory: skipHistoryByPec.get(pec.id) ?? []
+			};
+		});
+	}
+
 	async listSeries(userId: string) {
 		const roles = await getUserRoleNames(userId);
 		if (roles.includes('admin')) return this.repository.listSeries();
@@ -36,17 +92,34 @@ export class BarcodeService {
 	}
 
 	async listBatches(userId?: string) {
-		if (!userId) return this.repository.listBatches();
+		const attachRanges = async (rows: Awaited<ReturnType<BarcodeRepository['listBatches']>>) =>
+			Promise.all(
+				rows.map(async (row) => {
+					const rangeSourceBatchId =
+						row.type === 'reprint' && row.sourceBatchId ? row.sourceBatchId : row.id;
+					const ranges = await this.repository.getRangesForBatch(rangeSourceBatchId);
+					return {
+						...row,
+						startSerial: ranges.length
+							? Math.min(...ranges.map((range) => range.startSerial))
+							: null,
+						endSerial: ranges.length ? Math.max(...ranges.map((range) => range.endSerial)) : null
+					};
+				})
+			);
+		if (!userId) return attachRanges(await this.repository.listBatches());
 		const roles = await getUserRoleNames(userId);
-		if (roles.includes('admin')) return this.repository.listBatches();
+		if (roles.includes('admin')) return attachRanges(await this.repository.listBatches());
 		const rows = await db.query.userPecAllocations.findMany({
 			where: (allocation, { and, eq }) =>
 				and(eq(allocation.userId, userId), eq(allocation.active, true)),
 			columns: { pecId: true }
 		});
-		return this.repository.listBatches(
-			100,
-			rows.map((row) => row.pecId)
+		return attachRanges(
+			await this.repository.listBatches(
+				100,
+				rows.map((row) => row.pecId)
+			)
 		);
 	}
 
@@ -348,6 +421,133 @@ export class BarcodeService {
 
 		return {
 			batch: reprint,
+			barcodes,
+			print: await this.renderPrintPayload(barcodes, input.output, input.templateId)
+		};
+	}
+
+	async reprintSingleBarcode(input: {
+		batchId: string;
+		serial: number;
+		templateId?: number;
+		output: 'html_pdf' | 'zpl' | 'epl';
+		reason: string;
+		userId: string;
+		requestId: string;
+	}) {
+		const [batch] = await this.repository.getBatch(input.batchId);
+		if (!batch) throw notFound('Barcode batch not found.');
+		const sourceBatchId =
+			batch.type === 'reprint' && batch.sourceBatchId ? batch.sourceBatchId : batch.id;
+		const [pec] = await this.repository.getPec(batch.pecId);
+		if (!pec) throw notFound('PEC not found.');
+		const ranges = await this.repository.getRangesForBatch(sourceBatchId);
+		const containsSerial = ranges.some(
+			(range) => input.serial >= range.startSerial && input.serial <= range.endSerial
+		);
+		if (!containsSerial) throw notFound('Barcode not found in this batch.');
+		const [reprint] = await db
+			.insert(barcodeBatches)
+			.values({
+				type: 'reprint',
+				pecId: batch.pecId,
+				year: batch.year,
+				templateId: input.templateId,
+				sourceBatchId,
+				quantity: 1,
+				reason: input.reason,
+				createdBy: input.userId
+			})
+			.returning();
+		const [barcode] = expandBarcodeRange({
+			pecCode: pec.code,
+			year: batch.year,
+			startSerial: input.serial,
+			endSerial: input.serial
+		});
+		await writeAudit(db, {
+			requestId: input.requestId,
+			actorUserId: input.userId,
+			action: 'barcode.batch.reprint',
+			resourceType: 'pec',
+			resourceId: batch.pecId,
+			reason: input.reason,
+			after: { sourceBatchId, reprintBatchId: reprint.id, serial: input.serial, barcode }
+		});
+		return {
+			batch: reprint,
+			barcodes: [barcode],
+			print: await this.renderPrintPayload([barcode], input.output, input.templateId)
+		};
+	}
+
+	async reprintPecRange(input: {
+		pecId: number;
+		year: number;
+		startSerial: number;
+		endSerial: number;
+		templateId?: number;
+		output: 'html_pdf' | 'zpl' | 'epl';
+		reason: string;
+		userId: string;
+		requestId: string;
+	}) {
+		const quantity = input.endSerial - input.startSerial + 1;
+		if (quantity > 1000) throw conflict('Reprint range cannot exceed 1000 barcodes.');
+		const [pec] = await this.repository.getPec(input.pecId);
+		if (!pec) throw notFound('PEC not found.');
+		const ranges = await this.repository.listRangesCovering(
+			input.pecId,
+			input.year,
+			input.startSerial,
+			input.endSerial
+		);
+		let cursor = input.startSerial;
+		for (const range of ranges) {
+			if (range.startSerial > cursor) break;
+			if (range.endSerial >= cursor) cursor = range.endSerial + 1;
+			if (cursor > input.endSerial) break;
+		}
+		if (cursor <= input.endSerial) {
+			throw notFound('Requested barcode range was not found in previous printed ranges.');
+		}
+		const [reprint] = await db
+			.insert(barcodeBatches)
+			.values({
+				type: 'reprint',
+				pecId: input.pecId,
+				year: input.year,
+				templateId: input.templateId,
+				sourceBatchId: ranges[0]?.batchId,
+				quantity,
+				reason: input.reason,
+				createdBy: input.userId
+			})
+			.returning();
+		const barcodes = expandBarcodeRange({
+			pecCode: pec.code,
+			year: input.year,
+			startSerial: input.startSerial,
+			endSerial: input.endSerial
+		});
+		await writeAudit(db, {
+			requestId: input.requestId,
+			actorUserId: input.userId,
+			action: 'barcode.batch.reprint',
+			resourceType: 'pec',
+			resourceId: input.pecId,
+			reason: input.reason,
+			after: {
+				reprintBatchId: reprint.id,
+				startSerial: input.startSerial,
+				endSerial: input.endSerial,
+				quantity
+			}
+		});
+		return {
+			batch: reprint,
+			startSerial: input.startSerial,
+			endSerial: input.endSerial,
 			barcodes,
 			print: await this.renderPrintPayload(barcodes, input.output, input.templateId)
 		};
