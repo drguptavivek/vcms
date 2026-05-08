@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'smol-toml';
 
@@ -15,11 +15,15 @@ type Registry = {
 };
 
 let cachedRegistry: Registry | undefined;
+let cachedRegistryMtimeMs = 0;
 
 export function getPrivilegeRegistry() {
-	if (!cachedRegistry) {
-		const raw = readFileSync(join(process.cwd(), 'src/lib/server/authz/privileges.toml'), 'utf8');
+	const path = join(process.cwd(), 'src/lib/server/authz/privileges.toml');
+	const mtimeMs = statSync(path).mtimeMs;
+	if (!cachedRegistry || cachedRegistryMtimeMs !== mtimeMs) {
+		const raw = readFileSync(path, 'utf8');
 		cachedRegistry = parse(raw) as unknown as Registry;
+		cachedRegistryMtimeMs = mtimeMs;
 	}
 	return cachedRegistry;
 }

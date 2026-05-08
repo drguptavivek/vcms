@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import ReprintCodePanel from '$lib/components/barcode/ReprintCodePanel.svelte';
+	import { getDefaultQzPrinter, listQzPrinters, printRawBarcode } from '$lib/qz/qz-direct-print';
+	import { onMount } from 'svelte';
 
 	let { data } = $props();
 
@@ -13,12 +15,32 @@
 			| { output: 'html_pdf'; content: Array<{ value: string; svg: string }> }
 			| { output: 'zpl' | 'epl'; content: string };
 	};
+	type RawOutput = 'zpl' | 'epl';
+	type BarcodeOutput = 'html_pdf' | RawOutput;
+	type BrowserPrintProfile = 'a4' | 'a5';
+	type QzDefaultSettings = Record<RawOutput, { printer: string; templateId: string }> & {
+		defaultOutput: BarcodeOutput;
+		browserPrint: { profile: BrowserPrintProfile };
+	};
 
 	let search = $state('');
 	let selectedOutput = $state<'html_pdf' | 'zpl' | 'epl'>('html_pdf');
 	let selectedTemplateId = $state('');
 	let responseData = $state<PrintResponse | null>(null);
 	let message = $state('');
+	let qzMessage = $state('');
+	let qzDefaultMessage = $state('');
+	let qzBusy = $state(false);
+	let qzPrinters = $state<string[]>([]);
+	let selectedQzPrinter = $state('');
+	let qzDefaultPanelOpen = $state(false);
+	let printOutputOpen = $state(false);
+	let qzDefaults = $state<QzDefaultSettings>({
+		defaultOutput: 'html_pdf',
+		zpl: { printer: '', templateId: '' },
+		epl: { printer: '', templateId: '' },
+		browserPrint: { profile: 'a4' }
+	});
 	let reservePec = $state<(typeof data.pecs)[number] | null>(null);
 	let expandedSkipHistoryPecId = $state<number | null>(null);
 	let pendingGenerate = $state<{
@@ -32,6 +54,29 @@
 		run: (typeof data.recentPrintRuns)[number];
 	} | null>(null);
 	const svgDataUri = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+	const qzDefaultsStorageKey = 'vcms.qz.barcodeDefaults.v1';
+	const sampleBarcode = 'XX-XX-XXXXXX';
+	const emptyQzDefaults: QzDefaultSettings = {
+		defaultOutput: 'html_pdf',
+		zpl: { printer: '', templateId: '' },
+		epl: { printer: '', templateId: '' },
+		browserPrint: { profile: 'a4' }
+	};
+
+	onMount(() => {
+		const localDefaults = readLocalQzDefaults();
+		const profileDefaults = normalizeQzDefaults(data.printPreferences);
+		qzDefaults =
+			localDefaults && hasMeaningfulQzDefaults(localDefaults) ? localDefaults : profileDefaults;
+		if (
+			(!localDefaults || !hasMeaningfulQzDefaults(localDefaults)) &&
+			hasMeaningfulQzDefaults(profileDefaults)
+		) {
+			persistLocalQzDefaults(profileDefaults);
+		}
+		selectedOutput = qzDefaults.defaultOutput;
+		applyOutputDefaults(selectedOutput);
+	});
 
 	let filteredPecs = $derived(
 		data.pecs.filter((pec) => {
@@ -63,6 +108,15 @@
 		return `${String(pecCode).padStart(2, '0')}-${String(data.year).padStart(2, '0')}-${String(serial).padStart(6, '0')}`;
 	}
 
+	function setSelectedOutput(event: Event) {
+		selectedOutput = (event.currentTarget as HTMLSelectElement).value as typeof selectedOutput;
+		applyOutputDefaults(selectedOutput);
+	}
+
+	function setActionOutput(event: Event) {
+		setSelectedOutput(event);
+	}
+
 	function prepareGenerate(event: SubmitEvent, pec: (typeof data.pecs)[number]) {
 		event.preventDefault();
 		const form = new FormData(event.currentTarget as HTMLFormElement);
@@ -78,6 +132,7 @@
 			endSerial: pec.nextSerial + quantity - 1
 		};
 		responseData = null;
+		printOutputOpen = false;
 		message = '';
 	}
 
@@ -90,6 +145,11 @@
 	}
 
 	function openReprintRange(pec: (typeof data.pecs)[number]) {
+		if (!pec.printedRanges.length) {
+			message = 'Reprint is available only after at least one barcode has been printed for this PEC/year.';
+			return;
+		}
+		applySavedBarcodeOutputDefaults();
 		pendingReprintPec = pec;
 		pendingGenerate = null;
 		pendingRecentReprint = null;
@@ -103,7 +163,7 @@
 
 	async function confirmGenerateBatch() {
 		if (!pendingGenerate) return;
-		responseData = await postJson(
+		const result = await postJson(
 			'/api/v1/barcode/batches',
 			{
 				pecId: pendingGenerate.pec.id,
@@ -114,9 +174,12 @@
 			},
 			'Failed to generate barcodes.'
 		);
+		responseData = result;
 		if (responseData) {
+			printOutputOpen = responseData.print.output === 'html_pdf';
 			pendingGenerate = null;
-			await invalidateAll();
+			const qzSent = await sendRawPrintResponseToQz(responseData);
+			if (responseData.print.output === 'html_pdf' || qzSent) await invalidateAll();
 		}
 	}
 
@@ -126,7 +189,7 @@
 		reason: string;
 	}) {
 		if (!pendingReprintPec) return;
-		responseData = await postJson(
+		const result = await postJson(
 			'/api/v1/barcode/ranges/reprint',
 			{
 				pecId: pendingReprintPec.id,
@@ -139,12 +202,17 @@
 			},
 			'Reprint range failed.'
 		);
-		if (responseData) pendingReprintPec = null;
+		responseData = result;
+		if (responseData) {
+			printOutputOpen = responseData.print.output === 'html_pdf';
+			pendingReprintPec = null;
+			await sendRawPrintResponseToQz(responseData);
+		}
 	}
 
 	async function reprintPecSingle(input: { serial: number; reason: string }) {
 		if (!pendingReprintPec) return;
-		responseData = await postJson(
+		const result = await postJson(
 			'/api/v1/barcode/ranges/reprint',
 			{
 				pecId: pendingReprintPec.id,
@@ -157,7 +225,12 @@
 			},
 			'Single barcode reprint failed.'
 		);
-		if (responseData) pendingReprintPec = null;
+		responseData = result;
+		if (responseData) {
+			printOutputOpen = responseData.print.output === 'html_pdf';
+			pendingReprintPec = null;
+			await sendRawPrintResponseToQz(responseData);
+		}
 	}
 
 	function openReserveOffline(pec: (typeof data.pecs)[number]) {
@@ -189,6 +262,7 @@
 			const endSerial = Number(form.get('endSerial'));
 			const messagePec = reservePec;
 			responseData = null;
+			printOutputOpen = false;
 			closeReserveOffline();
 			message = messagePec
 				? `Manual PEC code skip saved: ${barcodeValue(messagePec.code, startSerial)} to ${barcodeValue(messagePec.code, endSerial)} skipped.`
@@ -198,10 +272,12 @@
 	}
 
 	function openRecentReprint(run: (typeof data.recentPrintRuns)[number]) {
+		applySavedBarcodeOutputDefaults();
 		pendingRecentReprint = { run };
 		pendingGenerate = null;
 		pendingReprintPec = null;
 		responseData = null;
+		printOutputOpen = false;
 		message = '';
 	}
 
@@ -216,7 +292,7 @@
 	}) {
 		if (!pendingRecentReprint) return;
 		const run = pendingRecentReprint.run;
-		responseData = await postJson(
+		const result = await postJson(
 			'/api/v1/barcode/ranges/reprint',
 			{
 				pecId: run.pecId,
@@ -229,13 +305,18 @@
 			},
 			'Reprint range failed.'
 		);
-		if (responseData) pendingRecentReprint = null;
+		responseData = result;
+		if (responseData) {
+			printOutputOpen = responseData.print.output === 'html_pdf';
+			pendingRecentReprint = null;
+			await sendRawPrintResponseToQz(responseData);
+		}
 	}
 
 	async function reprintRecentSingle(input: { serial: number; reason: string }) {
 		if (!pendingRecentReprint) return;
 		const run = pendingRecentReprint.run;
-		responseData = await postJson(
+		const result = await postJson(
 			'/api/v1/barcode/ranges/reprint',
 			{
 				pecId: run.pecId,
@@ -248,7 +329,333 @@
 			},
 			'Single barcode reprint failed.'
 		);
-		if (responseData) pendingRecentReprint = null;
+		responseData = result;
+		if (responseData) {
+			printOutputOpen = responseData.print.output === 'html_pdf';
+			pendingRecentReprint = null;
+			await sendRawPrintResponseToQz(responseData);
+		}
+	}
+
+	async function loadQzPrinters() {
+		qzBusy = true;
+		qzMessage = 'Checking QZ Tray printers...';
+		qzDefaultMessage = 'Checking QZ Tray printers...';
+		try {
+			const [printers, defaultPrinter] = await Promise.all([
+				listQzPrinters(),
+				getDefaultQzPrinter().catch(() => '')
+			]);
+			qzPrinters = printers;
+			if (!qzDefaults.zpl.printer) qzDefaults.zpl.printer = defaultPrinter || printers[0] || '';
+			if (!qzDefaults.epl.printer) qzDefaults.epl.printer = defaultPrinter || printers[0] || '';
+			applyOutputDefaults(selectedOutput);
+			const loadedMessage = printers.length
+				? 'QZ Tray printers loaded.'
+				: 'QZ Tray is reachable, but no printers were reported.';
+			qzMessage = loadedMessage;
+			qzDefaultMessage = loadedMessage;
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : 'QZ Tray printer lookup failed.';
+			qzMessage = errorMessage;
+			qzDefaultMessage = errorMessage;
+		} finally {
+			qzBusy = false;
+		}
+	}
+
+	async function sendRawPrintToQz() {
+		if (!responseData) return;
+		await sendRawPrintResponseToQz(responseData);
+	}
+
+	async function sendRawPrintResponseToQz(printResponse: PrintResponse) {
+		if (printResponse.print.output === 'html_pdf') return false;
+		applyOutputDefaults(printResponse.print.output);
+		if (!selectedQzPrinter) {
+			qzMessage = 'Select a QZ printer before sending raw printer commands.';
+			return false;
+		}
+
+		qzBusy = true;
+		qzMessage = `Sending ${printResponse.print.output.toUpperCase()} to ${selectedQzPrinter}...`;
+		try {
+			await printRawBarcode({
+				printerName: selectedQzPrinter,
+				language: printResponse.print.output,
+				data: printResponse.print.content,
+				jobName: `VCMS ${printResponse.barcodes.length} barcode(s)`
+			});
+			qzMessage = `Sent ${printResponse.barcodes.length} barcode(s) to ${selectedQzPrinter}.`;
+			return true;
+		} catch (error) {
+			qzMessage = error instanceof Error ? error.message : 'QZ Tray print failed.';
+			return false;
+		} finally {
+			qzBusy = false;
+		}
+	}
+
+	function printBrowserOutput() {
+		applyBrowserPrintProfile(qzDefaults.browserPrint.profile);
+		window.print();
+	}
+
+	function openQzDefaultPanel() {
+		qzDefaultPanelOpen = true;
+		qzDefaultMessage = '';
+		void hydrateQzDefaultsFromProfileIfNeeded();
+	}
+
+	function closeQzDefaultPanel() {
+		qzDefaultPanelOpen = false;
+	}
+
+	function togglePrintOutput() {
+		printOutputOpen = !printOutputOpen;
+	}
+
+	async function saveQzDefaults() {
+		const nextDefaults = snapshotQzDefaults();
+		persistLocalQzDefaults(nextDefaults);
+		selectedOutput = nextDefaults.defaultOutput;
+		applyOutputDefaults(selectedOutput);
+		try {
+			await saveUserPrintPreferences(nextDefaults);
+			qzDefaultMessage =
+				'Defaults saved for this browser and your VCMS user profile fallback.';
+		} catch (error) {
+			qzDefaultMessage =
+				error instanceof Error
+					? `Browser defaults saved, but user profile fallback was not saved: ${error.message}`
+					: 'Browser defaults saved, but user profile fallback was not saved.';
+		}
+	}
+
+	async function clearQzDefaults() {
+		localStorage.removeItem(qzDefaultsStorageKey);
+		qzDefaults = normalizeQzDefaults(emptyQzDefaults);
+		applyOutputDefaults(selectedOutput);
+		try {
+			await saveUserPrintPreferences(emptyQzDefaults);
+			qzDefaultMessage = 'Defaults cleared for this browser and your VCMS user profile.';
+		} catch (error) {
+			qzDefaultMessage =
+				error instanceof Error
+					? `Browser defaults cleared, but user profile fallback was not cleared: ${error.message}`
+					: 'Browser defaults cleared, but user profile fallback was not cleared.';
+		}
+	}
+
+	async function testSamplePrint(output: RawOutput) {
+		const defaults = qzDefaults[output];
+		if (!defaults.printer) {
+			qzDefaultMessage = `Select a ${output.toUpperCase()} printer before testing.`;
+			return;
+		}
+		qzBusy = true;
+		qzDefaultMessage = `Sending ${output.toUpperCase()} sample to ${defaults.printer}...`;
+		try {
+			await printRawBarcode({
+				printerName: defaults.printer,
+				language: output,
+				data: renderSampleBarcode(output, defaults.templateId),
+				jobName: `VCMS ${output.toUpperCase()} sample barcode`
+			});
+			qzDefaultMessage = `Sample barcode sent to ${defaults.printer}.`;
+		} catch (error) {
+			qzDefaultMessage = error instanceof Error ? error.message : 'QZ Tray sample print failed.';
+		} finally {
+			qzBusy = false;
+		}
+	}
+
+	function readQzDefaults(raw: string): QzDefaultSettings {
+		try {
+			return normalizeQzDefaults(JSON.parse(raw));
+		} catch {
+			return normalizeQzDefaults(emptyQzDefaults);
+		}
+	}
+
+	function readLocalQzDefaults() {
+		const raw = localStorage.getItem(qzDefaultsStorageKey);
+		return raw ? readQzDefaults(raw) : null;
+	}
+
+	function persistLocalQzDefaults(settings: QzDefaultSettings) {
+		localStorage.setItem(qzDefaultsStorageKey, JSON.stringify(settings));
+	}
+
+	function hasMeaningfulQzDefaults(settings: QzDefaultSettings) {
+		return Boolean(
+				settings.zpl.printer ||
+				settings.zpl.templateId ||
+				settings.epl.printer ||
+				settings.epl.templateId ||
+				settings.defaultOutput !== 'html_pdf' ||
+				settings.browserPrint.profile !== 'a4'
+		);
+	}
+
+	function normalizeQzDefaults(input: unknown): QzDefaultSettings {
+		const parsed = input as Partial<
+			Record<RawOutput, Partial<{ printer: string; templateId: string }>> & {
+				defaultOutput?: BarcodeOutput;
+				browserPrint?: Partial<{ profile: BrowserPrintProfile }>;
+			}
+		>;
+		const defaultOutput =
+			parsed?.defaultOutput === 'zpl' || parsed?.defaultOutput === 'epl'
+				? parsed.defaultOutput
+				: 'html_pdf';
+		return {
+			defaultOutput,
+			zpl: {
+				printer: typeof parsed?.zpl?.printer === 'string' ? parsed.zpl.printer : '',
+				templateId: typeof parsed?.zpl?.templateId === 'string' ? parsed.zpl.templateId : ''
+			},
+			epl: {
+				printer: typeof parsed?.epl?.printer === 'string' ? parsed.epl.printer : '',
+				templateId: typeof parsed?.epl?.templateId === 'string' ? parsed.epl.templateId : ''
+			},
+			browserPrint: {
+				profile: parsed?.browserPrint?.profile === 'a5' ? 'a5' : 'a4'
+			}
+		};
+	}
+
+	function snapshotQzDefaults(): QzDefaultSettings {
+		return {
+			defaultOutput: qzDefaults.defaultOutput,
+			zpl: { printer: qzDefaults.zpl.printer, templateId: qzDefaults.zpl.templateId },
+			epl: { printer: qzDefaults.epl.printer, templateId: qzDefaults.epl.templateId },
+			browserPrint: { profile: qzDefaults.browserPrint.profile }
+		};
+	}
+
+	async function saveUserPrintPreferences(printPreferences: QzDefaultSettings) {
+		const response = await fetch('/api/v1/users/profile/print-preferences', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ printPreferences })
+		});
+		const json = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			throw new Error(json.error?.message ?? 'User profile save failed.');
+		}
+	}
+
+	async function loadUserPrintPreferences() {
+		const response = await fetch('/api/v1/users/profile/print-preferences');
+		const json = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			throw new Error(json.error?.message ?? 'User profile preferences could not be loaded.');
+		}
+		return normalizeQzDefaults(json.data);
+	}
+
+	async function hydrateQzDefaultsFromProfileIfNeeded() {
+		const localDefaults = readLocalQzDefaults();
+		if (localDefaults && hasMeaningfulQzDefaults(localDefaults)) {
+			qzDefaults = localDefaults;
+			applyOutputDefaults(selectedOutput);
+			return;
+		}
+
+		try {
+			const profileDefaults = await loadUserPrintPreferences();
+			if (!hasMeaningfulQzDefaults(profileDefaults)) return;
+			qzDefaults = profileDefaults;
+			persistLocalQzDefaults(profileDefaults);
+			selectedOutput = profileDefaults.defaultOutput;
+			applyOutputDefaults(selectedOutput);
+			qzDefaultMessage = 'Loaded defaults from your VCMS user profile.';
+		} catch (error) {
+			qzDefaultMessage =
+				error instanceof Error ? error.message : 'User profile preferences could not be loaded.';
+		}
+	}
+
+	function printerOptionsFor(savedPrinter: string) {
+		return Array.from(new Set([savedPrinter, ...qzPrinters].filter(Boolean)));
+	}
+
+	function applyOutputDefaults(output: typeof selectedOutput) {
+		if (output === 'html_pdf') {
+			selectedQzPrinter = '';
+			return;
+		}
+		selectedQzPrinter = qzDefaults[output].printer;
+		selectedTemplateId = qzDefaults[output].templateId;
+	}
+
+	function applySavedBarcodeOutputDefaults() {
+		selectedOutput = qzDefaults.defaultOutput;
+		applyOutputDefaults(selectedOutput);
+	}
+
+	function templatesFor(output: RawOutput) {
+		return data.templates.filter((template) => template.type === output);
+	}
+
+	function actionPrinterOptions(output: typeof selectedOutput) {
+		if (output === 'html_pdf') return [];
+		return printerOptionsFor(qzDefaults[output].printer || selectedQzPrinter);
+	}
+
+	function renderSampleBarcode(output: RawOutput, templateId: string) {
+		const template = data.templates.find((item) => String(item.id) === templateId);
+		const widthMm = template?.widthMm ?? 50;
+		const heightMm = template?.heightMm ?? 25;
+		const dpi = template?.dpi ?? 203;
+		const layout = template?.layout as
+			| { barcodeX?: number; barcodeY?: number; textY?: number }
+			| undefined;
+		const barcodeHeight = template?.barcodeHeight ?? 80;
+		const y = layout?.barcodeY ?? 24;
+		const textY = layout?.textY ?? y + barcodeHeight + 12;
+		const widthDots = Math.round((widthMm / 25.4) * dpi);
+		const heightDots = Math.round((heightMm / 25.4) * dpi);
+		const code128Modules = 35 + sampleBarcode.length * 11;
+		const moduleWidth = code128Modules * 2 <= widthDots ? 2 : 1;
+		const x =
+			layout?.barcodeX ??
+			Math.max(0, Math.floor((widthDots - code128Modules * moduleWidth) / 2));
+		if (output === 'zpl') {
+			return [
+				'^XA',
+				'^CI28',
+				`^PW${widthDots}`,
+				`^LL${heightDots}`,
+				`^BY${moduleWidth},2,80`,
+				`^FO${x},${y}^BCN,${barcodeHeight},N,N,N`,
+				`^FD${sampleBarcode}^FS`,
+				`^FO${x},${textY}^A0N,28,28^FD${sampleBarcode}^FS`,
+				'^XZ'
+			].join('\r\n');
+		}
+		return [
+			'N',
+			`q${widthDots}`,
+			`Q${heightDots},24`,
+			`B${x},${y},0,1,${moduleWidth},${moduleWidth * 2},${barcodeHeight},N,"${sampleBarcode}"`,
+			`A${x},${textY},0,3,1,1,N,"${sampleBarcode}"`,
+			'P1'
+		].join('\r\n');
+	}
+
+	function applyBrowserPrintProfile(profile: BrowserPrintProfile) {
+		let style = document.getElementById('vcms-browser-print-profile') as HTMLStyleElement | null;
+		if (!style) {
+			style = document.createElement('style');
+			style.id = 'vcms-browser-print-profile';
+			document.head.append(style);
+		}
+		const pageSize = profile === 'a5' ? 'A5 portrait' : 'A4 portrait';
+		const margin = profile === 'a5' ? '8mm' : '10mm';
+		style.textContent = `@media print { @page { size: ${pageSize}; margin: ${margin}; } }`;
 	}
 </script>
 
@@ -271,12 +678,17 @@
 		</label>
 		<label class="filter-control">
 			<span>Output</span>
-			<select bind:value={selectedOutput}>
+			<select value={selectedOutput} onchange={setSelectedOutput}>
 				<option value="html_pdf">Browser/PDF</option>
 				<option value="zpl">ZPL</option>
 				<option value="epl">EPL</option>
 			</select>
 		</label>
+		<div class="filter-action">
+			<button type="button" class="secondary" onclick={openQzDefaultPanel}
+				>Set Default Printer</button
+			>
+		</div>
 	</form>
 	{#if message}<p
 			class={message.includes('failed') || message.includes('Failed') ? 'error' : 'success'}
@@ -324,8 +736,14 @@
 						</form>
 					</td>
 					<td>
-						<button type="button" class="secondary" onclick={() => openReprintRange(pec)}
-							>Reprint</button
+						<button
+							type="button"
+							class="secondary"
+							disabled={!pec.printedRanges.length}
+							title={!pec.printedRanges.length
+								? 'No printed barcodes exist for this PEC/year.'
+								: 'Reprint an already printed barcode range'}
+							onclick={() => openReprintRange(pec)}>Reprint</button
 						>
 					</td>
 					<td>
@@ -365,6 +783,40 @@
 									Clicking Print will allocate this range permanently and create the printer output.
 									Cancel if the PEC, year, quantity, template, or output mode is wrong.
 								</p>
+								<section class="print-action-settings">
+									<h4>Print Settings For This Action</h4>
+									<div class="action-settings-grid">
+										<label>
+											Mode
+											<select value={selectedOutput} onchange={setActionOutput}>
+												<option value="html_pdf">Browser/PDF</option>
+												<option value="zpl">ZPL</option>
+												<option value="epl">EPL</option>
+											</select>
+										</label>
+										{#if selectedOutput === 'zpl' || selectedOutput === 'epl'}
+											<label>
+												Printer
+												<select bind:value={selectedQzPrinter}>
+													<option value="">Select printer</option>
+													{#each actionPrinterOptions(selectedOutput) as printer (printer)}
+														<option value={printer}>{printer}</option>
+													{/each}
+												</select>
+											</label>
+										{:else}
+											<p class="muted">Browser/PDF uses the browser print dialog.</p>
+										{/if}
+									</div>
+									<div class="button-row">
+										<button type="button" class="secondary" disabled={qzBusy} onclick={loadQzPrinters}
+											>Find QZ Printers</button
+										>
+										<button type="button" class="secondary" onclick={openQzDefaultPanel}
+											>Manage Defaults</button
+										>
+									</div>
+								</section>
 								<div class="button-row">
 									<button type="button" onclick={confirmGenerateBatch}>Print</button>
 									<button type="button" class="secondary" onclick={cancelGenerate}>Cancel</button>
@@ -380,12 +832,50 @@
 								pecCode={pec.code}
 								pecName={pec.name}
 								year={data.year}
-								defaultStartSerial={Math.max(1, pec.lastGeneratedSerial || 1)}
-								defaultEndSerial={Math.max(1, pec.lastGeneratedSerial || 1)}
+								printedRanges={pec.printedRanges}
+								defaultStartSerial={pec.printedRanges[0]?.startSerial ?? 1}
+								defaultEndSerial={pec.printedRanges[0]?.endSerial ?? 1}
+								minSerial={Math.min(...pec.printedRanges.map((range) => range.startSerial))}
+								maxSerial={Math.max(...pec.printedRanges.map((range) => range.endSerial))}
 								onRangePrint={reprintPecRange}
 								onSinglePrint={reprintPecSingle}
 								onCancel={cancelReprintRange}
-							/>
+							>
+								<section class="print-action-settings">
+									<h4>Print Settings For This Reprint</h4>
+									<div class="action-settings-grid">
+										<label>
+											Mode
+											<select value={selectedOutput} onchange={setActionOutput}>
+												<option value="html_pdf">Browser/PDF</option>
+												<option value="zpl">ZPL</option>
+												<option value="epl">EPL</option>
+											</select>
+										</label>
+										{#if selectedOutput === 'zpl' || selectedOutput === 'epl'}
+											<label>
+												Printer
+												<select bind:value={selectedQzPrinter}>
+													<option value="">Select printer</option>
+													{#each actionPrinterOptions(selectedOutput) as printer (printer)}
+														<option value={printer}>{printer}</option>
+													{/each}
+												</select>
+											</label>
+										{:else}
+											<p class="muted">Browser/PDF uses the browser print dialog.</p>
+										{/if}
+									</div>
+									<div class="button-row">
+										<button type="button" class="secondary" disabled={qzBusy} onclick={loadQzPrinters}
+											>Find QZ Printers</button
+										>
+										<button type="button" class="secondary" onclick={openQzDefaultPanel}
+											>Manage Defaults</button
+										>
+									</div>
+								</section>
+							</ReprintCodePanel>
 						</td>
 					</tr>
 				{/if}
@@ -515,22 +1005,164 @@
 	</div>
 {/if}
 
+{#if qzDefaultPanelOpen}
+	<div class="scrim" role="presentation" onclick={closeQzDefaultPanel}></div>
+	<div class="slideout" aria-modal="true" role="dialog" aria-labelledby="qz-defaults-title">
+		<header class="slideout-header">
+			<div>
+				<p class="eyebrow">QZ Tray Workstation Defaults</p>
+				<h2 id="qz-defaults-title">Default Barcode Printer</h2>
+			</div>
+			<button type="button" class="secondary" onclick={closeQzDefaultPanel}>Close</button>
+		</header>
+
+		<section class="instructions">
+			<p>
+				These settings are saved in this browser on this workstation and copied to your VCMS
+				user profile. This browser copy is used first; your profile is used as a fallback when
+				you sign in from a browser profile that has no local defaults yet.
+			</p>
+			<div class="button-row">
+				<button type="button" class="secondary" disabled={qzBusy} onclick={loadQzPrinters}>
+					Find QZ Printers
+				</button>
+				<button type="button" onclick={saveQzDefaults}>Save Defaults</button>
+				<button type="button" class="secondary" onclick={clearQzDefaults}>Clear Defaults</button>
+			</div>
+			{#if qzDefaultMessage}<p class="muted">{qzDefaultMessage}</p>{/if}
+		</section>
+
+			<div class="default-printer-grid">
+			<section class="default-printer-panel">
+				<h3>Barcode Output</h3>
+				<label>
+					Default Mode
+					<select bind:value={qzDefaults.defaultOutput}>
+						<option value="html_pdf">Browser/PDF</option>
+						<option value="zpl">ZPL</option>
+						<option value="epl">EPL</option>
+					</select>
+				</label>
+			</section>
+
+			<section class="default-printer-panel">
+				<h3>Browser Print</h3>
+				<label>
+					Paper Profile
+					<select bind:value={qzDefaults.browserPrint.profile}>
+						<option value="a4">A4 portrait</option>
+						<option value="a5">A5 portrait</option>
+					</select>
+				</label>
+			</section>
+
+			<section class="default-printer-panel">
+				<h3>ZPL</h3>
+				<label>
+					Printer
+					<select bind:value={qzDefaults.zpl.printer}>
+						<option value="">Select printer</option>
+						{#each printerOptionsFor(qzDefaults.zpl.printer) as printer (printer)}
+							<option value={printer}>{printer}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					Template
+					<select bind:value={qzDefaults.zpl.templateId}>
+						<option value="">Default 50x25mm</option>
+						{#each templatesFor('zpl') as template (template.id)}
+							<option value={String(template.id)}>{template.name}</option>
+						{/each}
+					</select>
+				</label>
+				<button
+					type="button"
+					class="secondary"
+					disabled={qzBusy}
+					onclick={() => testSamplePrint('zpl')}
+				>
+					Test Sample Barcode
+				</button>
+			</section>
+
+			<section class="default-printer-panel">
+				<h3>EPL</h3>
+				<label>
+					Printer
+					<select bind:value={qzDefaults.epl.printer}>
+						<option value="">Select printer</option>
+						{#each printerOptionsFor(qzDefaults.epl.printer) as printer (printer)}
+							<option value={printer}>{printer}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					Template
+					<select bind:value={qzDefaults.epl.templateId}>
+						<option value="">Default 50x25mm</option>
+						{#each templatesFor('epl') as template (template.id)}
+							<option value={String(template.id)}>{template.name}</option>
+						{/each}
+					</select>
+				</label>
+				<button
+					type="button"
+					class="secondary"
+					disabled={qzBusy}
+					onclick={() => testSamplePrint('epl')}
+				>
+					Test Sample Barcode
+				</button>
+			</section>
+		</div>
+	</div>
+{/if}
+
 {#if responseData}
 	<section class="card print-output">
-		<h2>Print Output</h2>
-		<p>
-			{responseData.barcodes.length} barcode(s){#if responseData.startSerial && responseData.endSerial}:
-				serial {responseData.startSerial}–{responseData.endSerial}{/if}
-		</p>
-		{#if responseData.print.output === 'html_pdf'}
-			<div class="labels">
-				{#each responseData.print.content as label (label.value)}
-					<div class="label"><img src={svgDataUri(label.svg)} alt={label.value} /></div>
-				{/each}
+		<header class="collapsible-header">
+			<div>
+				<h2>Print Output</h2>
+				<p>
+					{responseData.barcodes.length} barcode(s){#if responseData.startSerial && responseData.endSerial}:
+						serial {responseData.startSerial}–{responseData.endSerial}{/if}
+				</p>
 			</div>
-			<button onclick={() => print()}>Browser Print</button>
-		{:else}
-			<textarea rows="18" readonly>{responseData.print.content}</textarea>
+			<button type="button" class="secondary" onclick={togglePrintOutput}>
+				{printOutputOpen ? 'Hide Output' : 'Show Output'}
+			</button>
+		</header>
+		{#if responseData.print.output !== 'html_pdf'}
+			<div class="qz-panel">
+				<p class="muted">
+					QZ printer: <strong>{selectedQzPrinter || 'No workstation default selected'}</strong>
+				</p>
+				<div class="button-row">
+					<button type="button" class="secondary" disabled={qzBusy} onclick={loadQzPrinters}>
+						Find QZ Printers
+					</button>
+					<button type="button" class="secondary" onclick={openQzDefaultPanel}
+						>Set Default Printer</button
+					>
+					<button type="button" disabled={qzBusy || !selectedQzPrinter} onclick={sendRawPrintToQz}>
+						Send to QZ Tray
+					</button>
+				</div>
+				{#if qzMessage}<p class="muted">{qzMessage}</p>{/if}
+			</div>
+		{/if}
+		{#if printOutputOpen}
+			{#if responseData.print.output === 'html_pdf'}
+				<div class="labels">
+					{#each responseData.print.content as label (label.value)}
+						<div class="label"><img src={svgDataUri(label.svg)} alt={label.value} /></div>
+					{/each}
+				</div>
+				<button onclick={printBrowserOutput}>Browser Print</button>
+			{:else}
+				<textarea rows="18" readonly>{responseData.print.content}</textarea>
+			{/if}
 		{/if}
 	</section>
 {/if}
@@ -580,7 +1212,42 @@
 								onRangePrint={reprintRecentRange}
 								onSinglePrint={reprintRecentSingle}
 								onCancel={cancelRecentReprint}
-							/>
+							>
+								<section class="print-action-settings">
+									<h4>Print Settings For This Reprint</h4>
+									<div class="action-settings-grid">
+										<label>
+											Mode
+											<select value={selectedOutput} onchange={setActionOutput}>
+												<option value="html_pdf">Browser/PDF</option>
+												<option value="zpl">ZPL</option>
+												<option value="epl">EPL</option>
+											</select>
+										</label>
+										{#if selectedOutput === 'zpl' || selectedOutput === 'epl'}
+											<label>
+												Printer
+												<select bind:value={selectedQzPrinter}>
+													<option value="">Select printer</option>
+													{#each actionPrinterOptions(selectedOutput) as printer (printer)}
+														<option value={printer}>{printer}</option>
+													{/each}
+												</select>
+											</label>
+										{:else}
+											<p class="muted">Browser/PDF uses the browser print dialog.</p>
+										{/if}
+									</div>
+									<div class="button-row">
+										<button type="button" class="secondary" disabled={qzBusy} onclick={loadQzPrinters}
+											>Find QZ Printers</button
+										>
+										<button type="button" class="secondary" onclick={openQzDefaultPanel}
+											>Manage Defaults</button
+										>
+									</div>
+								</section>
+							</ReprintCodePanel>
 						</td>
 					</tr>
 				{/if}
@@ -592,9 +1259,14 @@
 <style>
 	.filter-grid {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(12rem, 1fr));
+		grid-template-columns: repeat(3, minmax(12rem, 1fr)) auto;
 		gap: 0.8rem;
 		align-items: end;
+	}
+	.filter-action {
+		display: flex;
+		align-items: end;
+		min-height: 2.75rem;
 	}
 	.filter-control {
 		display: grid;
@@ -722,6 +1394,59 @@
 		display: grid;
 		gap: 0.9rem;
 	}
+	.default-printer-grid {
+		display: grid;
+		gap: 1rem;
+	}
+	.default-printer-panel {
+		display: grid;
+		gap: 0.75rem;
+		padding: 0.9rem;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.5rem;
+	}
+	.default-printer-panel h3 {
+		margin: 0;
+	}
+	.default-printer-panel label {
+		display: grid;
+		gap: 0.3rem;
+	}
+	.collapsible-header {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		align-items: flex-start;
+		margin-bottom: 0.8rem;
+	}
+	.collapsible-header h2 {
+		margin: 0;
+	}
+	.collapsible-header p {
+		margin: 0.25rem 0 0;
+	}
+	.print-action-settings {
+		display: grid;
+		gap: 0.75rem;
+		margin-block: 0.85rem;
+		padding: 0.85rem;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.5rem;
+		background: #f8fafc;
+	}
+	.print-action-settings h4 {
+		margin: 0;
+	}
+	.action-settings-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+		gap: 0.75rem;
+		align-items: end;
+	}
+	.action-settings-grid label {
+		display: grid;
+		gap: 0.3rem;
+	}
 	.labels {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
@@ -732,6 +1457,15 @@
 		padding: 0.5rem;
 		text-align: center;
 	}
+	.qz-panel {
+		display: grid;
+		gap: 0.75rem;
+		margin-bottom: 0.9rem;
+		padding: 0.85rem;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.5rem;
+		background: #f8fafc;
+	}
 	textarea {
 		width: 100%;
 		font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -739,6 +1473,9 @@
 	@media (max-width: 760px) {
 		.filter-grid {
 			grid-template-columns: 1fr;
+		}
+		.filter-action {
+			align-items: stretch;
 		}
 	}
 </style>

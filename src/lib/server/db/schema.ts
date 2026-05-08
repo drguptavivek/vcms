@@ -103,6 +103,15 @@ export const userPecAllocations = pgTable(
 	]
 );
 
+export const userProfiles = pgTable('user_profiles', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	printPreferences: jsonb('print_preferences_json').notNull().default({}),
+	createdAt: timestamp('created_at').notNull().defaultNow(),
+	updatedAt: timestamp('updated_at').notNull().defaultNow()
+});
+
 export const barcodeSeries = pgTable(
 	'barcode_series',
 	{

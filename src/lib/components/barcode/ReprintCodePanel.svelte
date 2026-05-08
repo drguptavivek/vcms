@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+
 	type ReprintRangeInput = {
 		startSerial: number;
 		endSerial: number;
@@ -14,6 +16,7 @@
 		pecCode: number;
 		pecName: string;
 		year: number;
+		printedRanges?: Array<{ startSerial: number; endSerial: number }>;
 		defaultStartSerial: number;
 		defaultEndSerial: number;
 		minSerial?: number;
@@ -23,12 +26,14 @@
 		onRangePrint: (input: ReprintRangeInput) => void | Promise<void>;
 		onSinglePrint: (input: ReprintSingleInput) => void | Promise<void>;
 		onCancel: () => void;
+		children?: Snippet;
 	};
 
 	let {
 		pecCode,
 		pecName,
 		year,
+		printedRanges = [],
 		defaultStartSerial,
 		defaultEndSerial,
 		minSerial = 1,
@@ -37,7 +42,8 @@
 		singleReason = 'Reprint one PEC barcode',
 		onRangePrint,
 		onSinglePrint,
-		onCancel
+		onCancel,
+		children
 	}: Props = $props();
 
 	let rangeStart = $state(1);
@@ -84,6 +90,17 @@
 		The system validates requested serials against earlier printed barcodes for this PEC/year. No
 		new barcode numbers are allocated.
 	</p>
+	{#if printedRanges.length}
+		<div class="printed-ranges">
+			<h4>Already Printed Ranges</h4>
+			<ul>
+				{#each printedRanges as range (`${range.startSerial}-${range.endSerial}`)}
+					<li>{barcodeValue(range.startSerial)} to {barcodeValue(range.endSerial)}</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
+	{@render children?.()}
 	<div class="reprint-panels">
 		<form class="reprint-card" onsubmit={printRange}>
 			<h4>Range</h4>
@@ -167,6 +184,20 @@
 	}
 	.reprint-card h4 {
 		margin: 0;
+	}
+	.printed-ranges {
+		margin-bottom: 1rem;
+		border: 1px solid #bae6fd;
+		border-radius: 0.5rem;
+		background: #f0f9ff;
+		padding: 0.75rem;
+	}
+	.printed-ranges h4 {
+		margin: 0 0 0.5rem;
+	}
+	.printed-ranges ul {
+		margin: 0;
+		padding-left: 1.25rem;
 	}
 	.range-preview {
 		display: flex;

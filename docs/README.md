@@ -26,7 +26,7 @@ Update documentation whenever implementation changes behavior, workflows, archit
 
 ## Domain Blueprints
 
-- `domains/barcode/`: PEC-centric print dashboard, barcode lifecycle, allocation, sequence reset, reprint, Manual PEC Code Skip, and printing.
+- `domains/barcode/`: PEC-centric print dashboard, barcode lifecycle, allocation, sequence reset, reprint, Manual PEC Code Skip, and direct printing.
 - `domains/identity-access/`: users, authentication, roles, ReBAC, privilege registry, and PEC allocations.
 - `domains/master-data/`: teams and PEC master data.
 - `domains/observability-security/`: runtime logging, SQL errors, audit logs, rate limiting, and route security.
@@ -37,3 +37,7 @@ Update documentation whenever implementation changes behavior, workflows, archit
 - `standards/architecture.md`: clean architecture and service-oriented module boundaries.
 - `standards/sveltekit.md`: SvelteKit conventions and project-local Svelte MCP usage.
 - `standards/tdd.md`: TDD and testing framework expectations.
+
+## User Guides
+
+- `user/admin-guide.md`: admin responsibilities, including QZ Tray integration status review.

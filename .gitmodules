@@ -1,0 +1,4 @@
+[submodule "vendor/qz-tray"]
+	path = vendor/qz-tray
+	url = https://github.com/drguptavivek/tray.git
+	branch = vcms/v2.2.6

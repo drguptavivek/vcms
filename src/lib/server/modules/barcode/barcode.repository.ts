@@ -89,6 +89,23 @@ export class BarcodeRepository {
 			.orderBy(desc(barcodeBatches.createdAt));
 	}
 
+	listPrintedRanges(year: number, userPecIds?: number[]) {
+		const filters = [eq(barcodeRanges.year, year), eq(barcodeRanges.status, 'printed')];
+		if (userPecIds?.length) filters.push(sql`${barcodeRanges.pecId} = any(${userPecIds})`);
+		return this.database
+			.select({
+				id: barcodeRanges.id,
+				batchId: barcodeRanges.batchId,
+				pecId: barcodeRanges.pecId,
+				startSerial: barcodeRanges.startSerial,
+				endSerial: barcodeRanges.endSerial,
+				createdAt: barcodeRanges.createdAt
+			})
+			.from(barcodeRanges)
+			.where(and(...filters))
+			.orderBy(desc(barcodeRanges.createdAt));
+	}
+
 	getBatch(batchId: string) {
 		return this.database
 			.select()

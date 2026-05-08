@@ -25,6 +25,7 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"auth:schema": "better-auth generate --config src/lib/server/auth.ts --output src/lib/server/db/auth.schema.ts --yes",
+		"qz:cert:dev": "bash scripts/generate-qz-dev-cert.sh",
 		"seed": "tsx scripts/seed.ts"
 	},
 	"dependencies": {

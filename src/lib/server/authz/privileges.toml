@@ -28,6 +28,18 @@ roles = ["admin"]
 resource = "system"
 audit = true
 
+[privileges."user.profile.view"]
+description = "View the signed-in user's profile preferences"
+roles = ["admin", "barcode_print_manager"]
+resource = "user"
+audit = false
+
+[privileges."user.profile.update"]
+description = "Update the signed-in user's profile preferences"
+roles = ["admin", "barcode_print_manager"]
+resource = "user"
+audit = true
+
 [privileges."barcode.series.view"]
 description = "View barcode series next serials"
 roles = ["admin", "barcode_print_manager"]
@@ -77,6 +89,30 @@ audit = true
 
 [privileges."printer_template.manage"]
 description = "Manage printer templates"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = true
+
+[privileges."qz.certificate.view"]
+description = "Fetch the VCMS QZ Tray signing certificate"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
+[privileges."qz.integration.view"]
+description = "View QZ Tray integration status and deployment guidance"
+roles = ["admin"]
+resource = "system"
+audit = false
+
+[privileges."qz.credentials.update"]
+description = "Update encrypted QZ Tray certificate and private key credentials"
+roles = ["admin"]
+resource = "system"
+audit = true
+
+[privileges."qz.message.sign"]
+description = "Sign QZ Tray websocket messages for direct printing"
 roles = ["admin", "barcode_print_manager"]
 resource = "system"
 audit = true

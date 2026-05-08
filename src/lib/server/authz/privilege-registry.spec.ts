@@ -12,4 +12,11 @@ describe('privilege registry', () => {
 	it('keeps sequence reset auditable', () => {
 		expect(getPrivilege('barcode.sequence.reset')?.audit).toBe(true);
 	});
+
+	it('loads user profile self-service privileges', () => {
+		expect(getPrivilege('user.profile.update')).toMatchObject({
+			resource: 'user',
+			audit: true
+		});
+	});
 });

@@ -1,8 +1,26 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { pecs, roles, user, userPecAllocations, userRoles } from '$lib/server/db/schema';
+import {
+	pecs,
+	roles,
+	user,
+	userPecAllocations,
+	userProfiles,
+	userRoles
+} from '$lib/server/db/schema';
 import { writeAudit } from '$lib/server/observability/audit';
 import { notFound } from '$lib/server/observability/errors';
+import {
+	userPrintPreferencesSchema,
+	type UserPrintPreferences
+} from './user.schemas';
+
+const defaultPrintPreferences: UserPrintPreferences = {
+	defaultOutput: 'html_pdf',
+	zpl: { printer: '', templateId: '' },
+	epl: { printer: '', templateId: '' },
+	browserPrint: { profile: 'a4' }
+};
 
 export class UserService {
 	async listUsers() {
@@ -14,6 +32,58 @@ export class UserService {
 
 	async listRoles() {
 		return db.select().from(roles).orderBy(asc(roles.name));
+	}
+
+	async getPrintPreferences(userId: string): Promise<UserPrintPreferences> {
+		const [profile] = await db
+			.select({ printPreferences: userProfiles.printPreferences })
+			.from(userProfiles)
+			.where(eq(userProfiles.userId, userId))
+			.limit(1);
+		if (!profile) return defaultPrintPreferences;
+
+		const parsed = userPrintPreferencesSchema.safeParse(profile.printPreferences);
+		if (!parsed.success) return defaultPrintPreferences;
+		return parsed.data;
+	}
+
+	async updatePrintPreferences(input: {
+		userId: string;
+		printPreferences: UserPrintPreferences;
+		requestId: string;
+	}) {
+		const normalized = userPrintPreferencesSchema.parse(input.printPreferences);
+		const before = await this.getPrintPreferences(input.userId);
+		const [profile] = await db
+			.insert(userProfiles)
+			.values({
+				userId: input.userId,
+				printPreferences: normalized
+			})
+			.onConflictDoUpdate({
+				target: userProfiles.userId,
+				set: {
+					printPreferences: normalized,
+					updatedAt: sql`now()`
+				}
+			})
+			.returning({
+				userId: userProfiles.userId,
+				printPreferences: userProfiles.printPreferences
+			});
+		await writeAudit(db, {
+			requestId: input.requestId,
+			actorUserId: input.userId,
+			action: 'user.profile.update',
+			resourceType: 'user',
+			resourceId: input.userId,
+			before,
+			after: normalized
+		});
+		return {
+			userId: profile.userId,
+			printPreferences: normalized
+		};
 	}
 
 	async assignRole(input: {

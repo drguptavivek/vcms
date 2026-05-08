@@ -14,6 +14,7 @@ export const rateLimitPolicies = {
 	mutation: { name: 'mutation', limit: 30, windowSeconds: 60 },
 	auth: { name: 'auth', limit: 10, windowSeconds: 60 },
 	barcodeMutation: { name: 'barcode_mutation', limit: 15, windowSeconds: 60 },
+	qzSigning: { name: 'qz_signing', limit: 60, windowSeconds: 60 },
 	sensitive: { name: 'sensitive', limit: 8, windowSeconds: 60 }
 } satisfies Record<string, RateLimitPolicy>;
 

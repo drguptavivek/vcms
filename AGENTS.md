@@ -33,13 +33,23 @@ src/lib/server/modules/<feature>/
 - Vitest, `@testing-library/svelte`, Playwright, V8 coverage.
 - Structured runtime, SQL error, and audit logging.
 
+## Workflow
+
+- Delegtae to  focused Spark subagents for planned bounded implementation when practical.
+- Use a security-audit subagent for new/changed routes before commit.
+- Use a documentation subagent for new/changed routes, workflows, and privilege-sensitive features.
+- Review subagent output before considering work complete.
+- Do not commit unless the user asks.
+- Always run svelte.svelte-autofixer by focused Spark subagents 
+
+
 ## SvelteKit
 
-- Use project Svelte MCP when available.
+- Use project Svelte MCP when available. - call via spark subagents
+- delegate  svelte.svelte-autofixer to a spark subagent
 - For Svelte tasks: `list-sections`, then relevant `get-documentation`.
-- Run `svelte-autofixer` after Svelte edits until clean.
-- Run `svelte-autofixer` on every changed `.svelte` file in full. Snippets only after a clean full-file pass.
-- If Svelte MCP is unavailable, say so and use official docs.
+- Run `svelte-autofixer` after Svelte edits until clean , call via spark subagents
+- Run `svelte-autofixer` on every changed `.svelte` file in full. - call via spark subagents
 - Use file-based routing and route groups like `(auth)` and `(app)`.
 - Use `+layout.server.ts` for group auth/app-shell data.
 - Use `+page.server.ts` for page data.
@@ -58,7 +68,6 @@ src/lib/server/modules/<feature>/
 ## AuthZ
 
 - Every API mutation needs a named privilege.
-- `barcode_print_manager` can only operate on allocated PECs.
 - Privilege-sensitive changes need audit logs: user, action, resource, request ID, timestamp, reason, before/after.
 
 ## Route Security
@@ -72,7 +81,6 @@ src/lib/server/modules/<feature>/
 ## Tests
 
 - Use TDD for business logic.
-- Add/update failing tests before service behavior changes.
 - Cover allocation, reset, reservation, reprint, validation, and AuthZ.
 - Bug fixes need regression tests unless no practical seam exists.
 - Do not weaken tests unless wrong; document corrections.
@@ -94,13 +102,6 @@ src/lib/server/modules/<feature>/
 - All Markdown needs YAML frontmatter.
 - Update indexes when files are added, renamed, deprecated, or materially changed.
 
-## Workflow
-
-- Prefer focused Spark subagents for planned bounded implementation when practical.
-- Use a security-audit subagent for new/changed routes before commit.
-- Use a documentation subagent for new/changed routes, workflows, and privilege-sensitive features.
-- Review subagent output before considering work complete.
-- Do not commit unless the user asks.
 
 ## Quality
 

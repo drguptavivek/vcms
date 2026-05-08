@@ -15,7 +15,7 @@ This domain covers the PEC-centric barcode printing dashboard, barcode series, a
 
 - `api.md`: barcode API routes and payloads.
 - `technical.md`: barcode lifecycle and business rules.
-- `printing.md`: browser/PDF, ZPL, and EPL output.
+- `printing.md`: browser/PDF, ZPL, EPL, and QZ Tray direct-print output.
 - `user-guide.md`: barcode print manager workflows.
 
 ## Related Standards

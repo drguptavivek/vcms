@@ -20,7 +20,8 @@
 	const adminLinks = [
 		{ path: '/teams', label: 'Teams', icon: 'users' },
 		{ path: '/pecs', label: 'PECs', icon: 'database' },
-		{ path: '/users', label: 'Users', icon: 'users' }
+		{ path: '/users', label: 'Users', icon: 'users' },
+		{ path: '/qz-integration', label: 'QZ Integration', icon: 'settings' }
 	] as const;
 
 	const overviewLinks = [{ path: '/dashboard', label: 'Dashboard', icon: 'home' }] as const;
@@ -31,7 +32,8 @@
 			? 'barcodes'
 			: pathname.startsWith('/teams') ||
 				  pathname.startsWith('/pecs') ||
-				  pathname.startsWith('/users')
+				  pathname.startsWith('/users') ||
+				  pathname.startsWith('/qz-integration')
 				? 'admin'
 				: 'overview'
 	);

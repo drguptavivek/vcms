@@ -11,6 +11,10 @@ dist/
 .env
 .env.*
 !.env.example
+.local/
+private-key.pem
+*-key.pem
+*.pfx
 
 # Logs
 logs/

@@ -26,17 +26,20 @@ export class BarcodeService {
 	constructor(private readonly repository = new BarcodeRepository()) {}
 
 	async listPrintDashboard(input: { userId: string; year: number }) {
+		const userPecIds = await this.getVisiblePecIds(input.userId);
 		const [pecRows, seriesRows, batchRows] = await Promise.all([
 			masterDataService.listPecs(input.userId),
 			this.listSeries(input.userId),
 			this.listBatches(input.userId)
 		]);
+		const printedRanges = await this.repository.listPrintedRanges(input.year, userPecIds);
 		const seriesByPec = new Map(
 			seriesRows
 				.filter((series) => series.year === input.year)
 				.map((series) => [series.pecId, series])
 		);
 		const batchesByPec = new Map<number, number>();
+		const printedRangesByPec = new Map<number, typeof printedRanges>();
 		const skipHistoryByPec = new Map<
 			number,
 			Array<{
@@ -65,19 +68,40 @@ export class BarcodeService {
 				skipHistoryByPec.set(batch.pecId, existing);
 			}
 		}
+		for (const range of printedRanges) {
+			const existing = printedRangesByPec.get(range.pecId) ?? [];
+			existing.push(range);
+			printedRangesByPec.set(range.pecId, existing);
+		}
 		return pecRows.map((pec) => {
 			const series = seriesByPec.get(pec.id);
 			const nextSerial = series?.nextSerial ?? 1;
+			const pecPrintedRanges = printedRangesByPec.get(pec.id) ?? [];
+			const lastPrintedSerial = pecPrintedRanges.length
+				? Math.max(...pecPrintedRanges.map((range) => range.endSerial))
+				: 0;
 			return {
 				...pec,
 				year: input.year,
 				nextSerial,
-				lastGeneratedSerial: Math.max(0, nextSerial - 1),
+				lastGeneratedSerial: lastPrintedSerial,
 				locked: series?.locked ?? false,
 				printBatchCount: batchesByPec.get(pec.id) ?? 0,
+				printedRanges: pecPrintedRanges,
 				codeSkipHistory: skipHistoryByPec.get(pec.id) ?? []
 			};
 		});
+	}
+
+	private async getVisiblePecIds(userId: string) {
+		const roles = await getUserRoleNames(userId);
+		if (roles.includes('admin')) return undefined;
+		const rows = await db.query.userPecAllocations.findMany({
+			where: (allocation, { and, eq }) =>
+				and(eq(allocation.userId, userId), eq(allocation.active, true)),
+			columns: { pecId: true }
+		});
+		return rows.map((row) => row.pecId);
 	}
 
 	async listSeries(userId: string) {
@@ -383,9 +407,11 @@ export class BarcodeService {
 	}) {
 		const [batch] = await this.repository.getBatch(input.batchId);
 		if (!batch) throw notFound('Barcode batch not found.');
+		const sourceBatchId = getPrintableSourceBatchId(batch);
 		const [pec] = await this.repository.getPec(batch.pecId);
 		if (!pec) throw notFound('PEC not found.');
-		const ranges = await this.repository.getRangesForBatch(batch.id);
+		const ranges = await this.repository.getRangesForBatch(sourceBatchId);
+		if (!ranges.length) throw notFound('Printable barcode range was not found for this batch.');
 		const barcodes = ranges.flatMap((range) =>
 			expandBarcodeRange({
 				pecCode: pec.code,
@@ -402,7 +428,7 @@ export class BarcodeService {
 				pecId: batch.pecId,
 				year: batch.year,
 				templateId: input.templateId,
-				sourceBatchId: batch.id,
+				sourceBatchId,
 				quantity: barcodes.length,
 				reason: input.reason,
 				createdBy: input.userId
@@ -416,7 +442,7 @@ export class BarcodeService {
 			resourceType: 'pec',
 			resourceId: batch.pecId,
 			reason: input.reason,
-			after: { sourceBatchId: batch.id, reprintBatchId: reprint.id }
+			after: { sourceBatchId, reprintBatchId: reprint.id }
 		});
 
 		return {
@@ -437,8 +463,7 @@ export class BarcodeService {
 	}) {
 		const [batch] = await this.repository.getBatch(input.batchId);
 		if (!batch) throw notFound('Barcode batch not found.');
-		const sourceBatchId =
-			batch.type === 'reprint' && batch.sourceBatchId ? batch.sourceBatchId : batch.id;
+		const sourceBatchId = getPrintableSourceBatchId(batch);
 		const [pec] = await this.repository.getPec(batch.pecId);
 		if (!pec) throw notFound('PEC not found.');
 		const ranges = await this.repository.getRangesForBatch(sourceBatchId);
@@ -572,3 +597,15 @@ export class BarcodeService {
 }
 
 export const barcodeService = new BarcodeService();
+
+export function getPrintableSourceBatchId(batch: {
+	id: string;
+	type: 'print' | 'reprint' | 'offline_reserve';
+	sourceBatchId: string | null;
+}) {
+	if (batch.type === 'reprint') {
+		if (!batch.sourceBatchId) throw notFound('Printable source batch was not found.');
+		return batch.sourceBatchId;
+	}
+	return batch.id;
+}
