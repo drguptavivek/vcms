@@ -202,15 +202,18 @@ If ODK Collect reuse is considered later, parity points above become interoperab
   list published definitions and version manifest
 - `GET /api/v1/mobile/emr-definitions/{definitionId}`
   fetch a specific published definition version
-- `POST /api/v1/emr-runtime/mobile/drafts`  
-  create local draft metadata and open sync state
-- `PATCH /api/v1/emr-runtime/mobile/drafts/{draftId}`  
-  upsert draft JSON with conflict-safe revision checks
-- `POST /api/v1/emr-runtime/mobile/drafts/{draftId}/submit`  
-  submit with idempotency key and optional forced conflict override reason
-- `POST /api/v1/emr-runtime/mobile/sync`  
+- `POST /api/v1/mobile/clinical-notes`
+  submit a PEC OPD note with idempotency key, optional definition version/hash, client metadata, and device metadata
+
+Planned future routes:
+
+- `POST /api/v1/mobile/drafts`
+  create server-visible draft metadata and open sync state if server-side draft sync is required
+- `PATCH /api/v1/mobile/drafts/{draftId}`
+  upsert draft JSON with conflict-safe revision checks if server-side draft sync is required
+- `POST /api/v1/mobile/sync`
   batch upload/download sync state and delivery status
-- `GET /api/v1/emr-runtime/mobile/encounters/{encounterId}/state`  
+- `GET /api/v1/mobile/encounters/{encounterId}/state`
   resolve barcode state and latest encounter envelope
 
 All listed routes must remain request-ID aware, rate-limited, validated through shared Zod schemas, and audited.
