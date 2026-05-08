@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { submitPecOpdNoteSchema } from './clinical-note.schemas';
+import { submitPecOpdMobileNoteSchema, submitPecOpdNoteSchema } from './clinical-note.schemas';
 
 describe('clinical note validation schemas', () => {
 	it('normalizes datetime payloads for encounter timing while preserving note metadata', () => {
@@ -99,5 +99,47 @@ describe('clinical note validation schemas', () => {
 			})
 		).toThrow();
 	});
-});
 
+	it('accepts mobile PEC OPD note payload with idempotency and metadata', () => {
+		const parsed = submitPecOpdMobileNoteSchema.parse({
+			pecId: 1,
+			barcode: '170026000001',
+			idempotencyKey: 'mobile-req-123456',
+			definitionVersion: 'v1',
+			definitionHash: 'hash-abc',
+			clientMetadata: {
+				clientName: 'VCMS Mobile',
+				platform: 'android',
+				sessionId: 'session-77'
+			},
+			deviceMetadata: {
+				deviceId: 'device-9',
+				networkType: 'wifi'
+			},
+			patient: {
+				fullName: 'Test Patient',
+				sex: 'female',
+				ageYears: 44
+			},
+			encounter: {
+				occurredAt: '2026-05-09T09:30:00'
+			},
+			pathway: {
+				pathwayType: 'pec_opd',
+				branchSource: 'pec_opd',
+				answers: { source: 'mobile' }
+			},
+			note: {
+				payload: { source: 'mobile-runtime' },
+				chiefComplaint: 'Headache'
+			}
+		});
+
+		expect(parsed.idempotencyKey).toBe('mobile-req-123456');
+		expect(parsed.clientMetadata).toMatchObject({
+			clientName: 'VCMS Mobile',
+			platform: 'android',
+			sessionId: 'session-77'
+		});
+	});
+});

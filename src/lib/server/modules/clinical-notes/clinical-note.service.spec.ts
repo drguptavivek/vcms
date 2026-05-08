@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { notFound } from '$lib/server/observability/errors';
+import { createHash } from 'node:crypto';
+import { conflict, notFound } from '$lib/server/observability/errors';
 import { ClinicalNoteService } from './clinical-note.service';
 
 const audit = vi.hoisted(() => ({ writeAudit: vi.fn() }));
@@ -21,7 +22,10 @@ const clinicalNoteRepository = vi.hoisted(() => ({
 	create: vi.fn(),
 	createVersion: vi.fn(),
 	findLatestByEncounterAndType: vi.fn(),
-	updateCurrentVersion: vi.fn()
+	updateCurrentVersion: vi.fn(),
+	findMobileSubmissionResultByUserAndIdempotency: vi.fn(),
+	createMobileSubmissionResult: vi.fn(),
+	updateMobileSubmissionResult: vi.fn()
 }));
 
 const clinicalWorklistService = vi.hoisted(() => ({
@@ -99,6 +103,49 @@ const baseInput = {
 		occurredAt: '2026-05-09T09:15:00'
 	}
 } as const;
+
+const baseMobileInput = {
+	...baseInput,
+	idempotencyKey: 'mobile-req-123456',
+	note: { chiefComplaint: 'Blurred vision', diagnosis: 'myopia', plan: 'reassess', payload: {} }
+} as const;
+
+function mobileCanonicalJson(value: unknown): unknown {
+	if (
+		value === null ||
+		typeof value === 'string' ||
+		typeof value === 'number' ||
+		typeof value === 'boolean'
+	) {
+		return value;
+	}
+
+	if (Array.isArray(value)) {
+		return value.map((entry) => mobileCanonicalJson(entry));
+	}
+
+	if (typeof value === 'object') {
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>)
+				.filter(([, entry]) => entry !== undefined)
+				.sort(([left], [right]) => left.localeCompare(right))
+				.map(([key, entry]) => [key, mobileCanonicalJson(entry)])
+		);
+	}
+
+	return value;
+}
+
+function buildMobileRequestHash(body: typeof baseMobileInput & Record<string, unknown>) {
+	const hashable: Record<string, unknown> = { ...body };
+	delete hashable.idempotencyKey;
+	delete hashable.clientMetadata;
+	delete hashable.deviceMetadata;
+
+	return `sha256:${createHash('sha256')
+		.update(JSON.stringify(mobileCanonicalJson(hashable)))
+		.digest('hex')}`;
+}
 
 describe('ClinicalNoteService', () => {
 	beforeEach(() => {
@@ -413,5 +460,182 @@ describe('ClinicalNoteService', () => {
 		expect(patientRepository.findByBarcode).not.toHaveBeenCalled();
 		expect(patientRepository.createForBarcode).not.toHaveBeenCalled();
 		expect(encounterRepository.create).not.toHaveBeenCalled();
+	});
+
+	it('returns a stored successful replay for repeated mobile idempotent submissions', async () => {
+		const service = new ClinicalNoteService(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			clinicalWorklistService as never,
+			runInTransactionMock([{ id: 4, active: true }] as never) as never
+		);
+		const replayPayload = {
+			patientId: 'patient-1',
+			encounterId: 'encounter-1',
+			carePathwayId: 'pathway-1',
+			noteId: 'note-1',
+			noteStatus: 'signed',
+			version: 1,
+			barcode: '01-26-000001'
+		};
+		clinicalNoteRepository.findMobileSubmissionResultByUserAndIdempotency.mockResolvedValue({
+			id: 'sub-1',
+			status: 'success',
+			requestHash: buildMobileRequestHash(baseMobileInput),
+			responsePayload: replayPayload
+		} as never);
+
+		const output = await service.submitPecOpdNoteWithMobileIdempotency({
+			body: {
+				...baseMobileInput,
+				note: {
+					...baseMobileInput.note,
+					payload: {}
+				}
+			},
+			userId: 'user-1',
+			requestId: 'req-1'
+		});
+
+		expect(output).toEqual(replayPayload);
+		expect(clinicalNoteRepository.createMobileSubmissionResult).not.toHaveBeenCalled();
+		expect(clinicalNoteRepository.create).not.toHaveBeenCalled();
+		expect(clinicalNoteRepository.findLatestByEncounterAndType).not.toHaveBeenCalled();
+		expect(clinicalWorklistService.createFromPecSubmission).not.toHaveBeenCalled();
+	});
+
+	it('returns conflict when mobile idempotent submissions reuse an idempotency key with different payload', async () => {
+		const service = new ClinicalNoteService(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			clinicalWorklistService as never,
+			runInTransactionMock([{ id: 4, active: true }] as never) as never
+		);
+		clinicalNoteRepository.findMobileSubmissionResultByUserAndIdempotency.mockResolvedValue({
+			id: 'sub-1',
+			status: 'success',
+			requestHash: 'sha256:other',
+			responsePayload: {}
+		} as never);
+
+		await expect(
+			service.submitPecOpdNoteWithMobileIdempotency({
+				body: {
+					...baseMobileInput,
+					note: {
+						...baseMobileInput.note,
+						payload: { source: 'mobile' }
+					}
+				},
+				userId: 'user-1',
+				requestId: 'req-1'
+			})
+		).rejects.toMatchObject({ code: conflict('idempotency key was reused').code });
+
+		expect(clinicalNoteRepository.createMobileSubmissionResult).not.toHaveBeenCalled();
+		expect(clinicalNoteRepository.updateMobileSubmissionResult).not.toHaveBeenCalled();
+		expect(clinicalNoteRepository.create).not.toHaveBeenCalled();
+	});
+
+	it('creates idempotent mobile submission state and returns first submission result', async () => {
+		const service = new ClinicalNoteService(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			clinicalWorklistService as never,
+			runInTransactionMock([{ id: 4, active: true }] as never) as never
+		);
+		patientRepository.findByBarcode.mockResolvedValue(undefined);
+		patientRepository.createForBarcode.mockResolvedValue({
+			id: 'patient-1',
+			barcode: '01-26-000001',
+			fullName: 'Asha Devi'
+		} as never);
+		encounterRepository.create.mockResolvedValue({
+			id: 'encounter-1',
+			patientId: 'patient-1',
+			pecId: 4,
+			barcodeSnapshot: '01-26-000001'
+		} as never);
+		carePathwayRepository.create.mockResolvedValue({
+			id: 'pathway-1',
+			patientId: 'patient-1',
+			encounterId: 'encounter-1'
+		} as never);
+		clinicalNoteRepository.findLatestByEncounterAndType.mockResolvedValue(undefined);
+		clinicalNoteRepository.create.mockResolvedValue({
+			id: 'note-1',
+			patientId: 'patient-1',
+			encounterId: 'encounter-1',
+			carePathwayId: 'pathway-1',
+			currentVersion: 1,
+			status: 'signed'
+		} as never);
+		clinicalNoteRepository.createVersion.mockResolvedValue({
+			id: 'version-1',
+			version: 1
+		} as never);
+		clinicalNoteRepository.createMobileSubmissionResult.mockResolvedValue({
+			id: 'sub-1'
+		} as never);
+		clinicalNoteRepository.updateMobileSubmissionResult.mockResolvedValue({
+			id: 'sub-1'
+		} as never);
+		clinicalNoteRepository.findMobileSubmissionResultByUserAndIdempotency.mockResolvedValue(
+			undefined
+		);
+
+		const output = await service.submitPecOpdNoteWithMobileIdempotency({
+			body: {
+				...baseMobileInput,
+				clientMetadata: {
+					clientName: 'VCMS Mobile',
+					clientVersion: '1.0.0'
+				},
+				note: {
+					...baseMobileInput.note,
+					payload: { source: 'mobile' }
+				}
+			},
+			userId: 'user-1',
+			requestId: 'req-1'
+		});
+
+		expect(output).toEqual({
+			patientId: 'patient-1',
+			encounterId: 'encounter-1',
+			carePathwayId: 'pathway-1',
+			noteId: 'note-1',
+			noteStatus: 'signed',
+			version: 1,
+			barcode: '01-26-000001'
+		});
+		expect(clinicalNoteRepository.createMobileSubmissionResult).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: 'user-1',
+				idempotencyKey: 'mobile-req-123456',
+				pecId: 4,
+				status: 'processing',
+				clientMetadata: expect.objectContaining({
+					clientName: 'VCMS Mobile',
+					clientVersion: '1.0.0'
+				})
+			})
+		);
+		expect(clinicalNoteRepository.updateMobileSubmissionResult).toHaveBeenCalledWith(
+			'sub-1',
+			expect.objectContaining({
+				status: 'success',
+				responsePayload: expect.objectContaining({
+					patientId: 'patient-1',
+					noteId: 'note-1'
+				})
+			})
+		);
 	});
 });

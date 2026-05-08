@@ -27,4 +27,12 @@ describe('privilege registry', () => {
 			roles: expect.arrayContaining(['admin'])
 		});
 	});
+
+	it('loads mobile EMR runtime definition privilege', () => {
+		expect(getPrivilege('emr.runtime.mobile_definition.view')).toMatchObject({
+			resource: 'system',
+			audit: false,
+			roles: expect.arrayContaining(['barcode_print_manager'])
+		});
+	});
 });

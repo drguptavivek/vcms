@@ -89,16 +89,20 @@ Drafts are created per patient encounter and kept in an encrypted local store:
 ## Definition Sync and Versioning
 
 - The app synchronizes only with published definitions.
-- Sync endpoints should return:
+- Implemented mobile sync contract returns:
   - `definitionId`
   - `definitionVersion`
-  - `revisionSequence`
-  - checksum/hash
-  - compatibility metadata (`minClientVersion`, feature flags)
+  - `versionHash`
+  - `updatedAt`
+  - cache metadata (`cacheKey`, `etag`, `maxAgeSeconds`)
+- `GET /api/v1/mobile/emr-definitions`
+  - manifest of active published definitions with cache metadata
+- `GET /api/v1/mobile/emr-definitions/{definitionId}`
+  - rendered model for one active definition version with cache metadata
 - Client behavior:
-  - fetch manifest first (lightweight).
-  - skip unchanged payloads via `ETag`/`If-None-Match` or revision token.
-  - background refresh on app resume and periodic retry windows.
+  - fetch manifest first (lightweight)
+  - fetch full definition payload only when manifest cache metadata changed
+  - background refresh on app resume and periodic retry windows
 - Publishing a new definition version never mutates prior versions. Runtime consumes an explicit version per draft.
 - If a newer version is required while a draft exists:
   - keep draft editable in its version.
@@ -114,9 +118,11 @@ The client renders fields from the definition DSL, independent of platform:
   - required, min/max, pattern, range, relevance, calculations.
   - choice label/label-enrichment metadata from published definition.
 - Client-side pre-validation:
- 1. required/relevance/canonical type check
- 2. constraint checks before queueing for submission
- 3. localized validation message mapping
+
+1.  required/relevance/canonical type check
+2.  constraint checks before queueing for submission
+3.  localized validation message mapping
+
 - Server-side validation remains authoritative.
 
 This preserves XLSForm-like UX expectations while using VCMS’s published schema model and error codes.
@@ -192,9 +198,9 @@ If ODK Collect reuse is considered later, parity points above become interoperab
 
 ## API Contract Area (Planning Scope)
 
-- `GET /api/v1/emr-runtime/mobile/definitions`  
+- `GET /api/v1/mobile/emr-definitions`
   list published definitions and version manifest
-- `GET /api/v1/emr-runtime/mobile/definitions/{definitionId}`  
+- `GET /api/v1/mobile/emr-definitions/{definitionId}`
   fetch a specific published definition version
 - `POST /api/v1/emr-runtime/mobile/drafts`  
   create local draft metadata and open sync state

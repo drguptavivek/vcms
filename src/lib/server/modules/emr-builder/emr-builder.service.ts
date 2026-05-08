@@ -1,6 +1,8 @@
 import { computeEmrNoteDefinitionVersionHash, parseEmrNoteDefinition } from './emr-builder.schemas';
 import { conflict, notFound } from '$lib/server/observability/errors';
 import { EmrBuilderRepository } from './emr-builder.repository';
+import type { EmrRenderModel } from '../emr-renderer/emr-renderer.types';
+import { EmrRendererService } from '../emr-renderer/emr-renderer.service';
 import type { EmrNoteDefinitionRecord, EmrNoteDefinitionVersionRecord } from './emr-builder.types';
 
 type SaveDraftInput = {
@@ -33,8 +35,47 @@ export type EmrBuilderDraftResult = {
 	draft: Awaited<ReturnType<EmrBuilderRepository['findDraftByDefinitionId']>>;
 };
 
+export type EmrMobileDefinitionCacheMetadata = {
+	versionHash: string;
+	cacheKey: string;
+	etag: string;
+	updatedAt: string;
+	publishedAt: string;
+	maxAgeSeconds: number;
+};
+
+export type EmrMobileDefinitionManifestItem = Pick<
+	EmrNoteDefinitionRecord,
+	| 'definitionId'
+	| 'slug'
+	| 'title'
+	| 'noteType'
+	| 'specialty'
+	| 'version'
+	| 'locale'
+	| 'tags'
+	| 'ownerTeam'
+> & {
+	updatedAt: string;
+	cache: EmrMobileDefinitionCacheMetadata;
+};
+
+export type EmrMobileDefinitionModelResult = {
+	definitionId: string;
+	version: number;
+	cache: EmrMobileDefinitionCacheMetadata;
+	renderModel: EmrRenderModel;
+};
+
 export class EmrBuilderService {
-	constructor(private readonly repository: EmrBuilderRepository = new EmrBuilderRepository()) {}
+	private readonly rendererService: EmrRendererService;
+
+	constructor(
+		private readonly repository: EmrBuilderRepository = new EmrBuilderRepository(),
+		rendererService?: EmrRendererService
+	) {
+		this.rendererService = rendererService ?? new EmrRendererService(this.repository);
+	}
 
 	async saveDraft(input: SaveDraftInput): Promise<EmrBuilderSaveDraftResult> {
 		const parsed = parseEmrNoteDefinition(input.definition);
@@ -138,6 +179,58 @@ export class EmrBuilderService {
 		});
 	}
 
+	listActiveDefinitionsForMobile(): Promise<EmrMobileDefinitionManifestItem[]> {
+		return this.repository.listActiveDefinitions().then((definitions) =>
+			definitions.map((definition) => ({
+				definitionId: definition.definitionId,
+				slug: definition.slug,
+				title: definition.title,
+				noteType: definition.noteType,
+				specialty: definition.specialty,
+				version: definition.version,
+				locale: definition.locale,
+				tags: definition.tags as string[],
+				ownerTeam: definition.ownerTeam,
+				updatedAt: definition.updatedAt.toISOString(),
+				cache: this.buildCacheMetadata({
+					definitionId: definition.definitionId,
+					versionHash: definition.versionHash,
+					version: definition.version,
+					updatedAt: definition.updatedAt
+				})
+			}))
+		);
+	}
+
+	async getPublishedDefinitionModelForMobile(
+		definitionId: string
+	): Promise<EmrMobileDefinitionModelResult> {
+		const definition = await this.repository.findDefinitionByDefinitionId(definitionId);
+		if (!definition || definition.status !== 'active') {
+			throw notFound('Published EMR definition not found.');
+		}
+
+		const version = await this.repository.findLatestVersion(definition.id);
+		if (!version) {
+			throw notFound('No published EMR definition version found.');
+		}
+
+		return {
+			definitionId: definition.definitionId,
+			version: version.version,
+			cache: this.buildCacheMetadata({
+				definitionId: definition.definitionId,
+				versionHash: version.versionHash,
+				version: version.version,
+				updatedAt: definition.updatedAt,
+				publishedAt: version.publishedAt
+			}),
+			renderModel: this.rendererService.renderDefinitionModel({
+				definition: version.payloadJson
+			})
+		};
+	}
+
 	async getDraft(definitionId: string): Promise<EmrBuilderDraftResult> {
 		const definition = await this.repository.findDefinitionByDefinitionId(definitionId);
 		if (!definition) {
@@ -173,6 +266,23 @@ export class EmrBuilderService {
 				: (existingDefinition?.effectiveUntil ?? null),
 			createdBy: existingDefinition?.createdBy ?? userId,
 			updatedBy: userId
+		};
+	}
+
+	private buildCacheMetadata(input: {
+		definitionId: string;
+		versionHash: string;
+		version: number;
+		updatedAt: Date;
+		publishedAt?: Date;
+	}): EmrMobileDefinitionCacheMetadata {
+		return {
+			versionHash: input.versionHash,
+			cacheKey: `${input.definitionId}:v${input.version}:${input.versionHash.slice(0, 16)}`,
+			etag: `W/"${input.definitionId}:${input.versionHash}"`,
+			updatedAt: input.updatedAt.toISOString(),
+			publishedAt: (input.publishedAt ?? input.updatedAt).toISOString(),
+			maxAgeSeconds: 900
 		};
 	}
 }

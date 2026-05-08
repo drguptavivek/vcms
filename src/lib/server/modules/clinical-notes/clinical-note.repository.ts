@@ -1,7 +1,15 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { clinicalNotes, clinicalNoteVersions } from '$lib/server/db/schema';
-import type { NewClinicalNote, NewClinicalNoteVersion } from './clinical-note.types';
+import {
+	clinicalNotes,
+	clinicalNoteVersions,
+	mobileSubmissionResults
+} from '$lib/server/db/schema';
+import type {
+	NewClinicalNote,
+	NewClinicalNoteVersion,
+	NewMobileSubmissionResult
+} from './clinical-note.types';
 
 type Database = typeof db;
 
@@ -43,5 +51,33 @@ export class ClinicalNoteRepository {
 			.where(eq(clinicalNotes.id, noteId))
 			.returning();
 		return note;
+	}
+
+	async findMobileSubmissionResultByUserAndIdempotency(userId: string, idempotencyKey: string) {
+		const [row] = await this.database
+			.select()
+			.from(mobileSubmissionResults)
+			.where(
+				and(
+					eq(mobileSubmissionResults.userId, userId),
+					eq(mobileSubmissionResults.idempotencyKey, idempotencyKey)
+				)
+			)
+			.limit(1);
+		return row;
+	}
+
+	async createMobileSubmissionResult(input: NewMobileSubmissionResult) {
+		const [row] = await this.database.insert(mobileSubmissionResults).values(input).returning();
+		return row;
+	}
+
+	async updateMobileSubmissionResult(id: string, input: Partial<NewMobileSubmissionResult>) {
+		const [row] = await this.database
+			.update(mobileSubmissionResults)
+			.set({ ...input, updatedAt: new Date() })
+			.where(eq(mobileSubmissionResults.id, id))
+			.returning();
+		return row;
 	}
 }

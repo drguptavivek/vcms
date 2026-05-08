@@ -304,4 +304,144 @@ describe('EmrBuilderService', () => {
 		expect(result.definition).toMatchObject(definition);
 		expect(result.draft).toBeUndefined();
 	});
+
+	it('lists active definitions for mobile sync with cache metadata', async () => {
+		const updatedAt = new Date('2026-05-09T10:00:00.000Z');
+		const repository = {
+			listActiveDefinitions: vi.fn(
+				async () =>
+					[
+						{
+							id: 'definition-1',
+							definitionId: 'opd-eye-note',
+							slug: 'opd-eye-note',
+							title: 'OPD Eye Note',
+							noteType: 'opd',
+							specialty: 'ophthalmology',
+							status: 'active',
+							version: 3,
+							versionHash: 'sha256:' + '1'.repeat(64),
+							locale: 'en-IN',
+							tags: ['opd', 'eye'],
+							ownerTeam: 'ophthalmology',
+							updatedAt
+						}
+					] as never
+			)
+		};
+
+		const service = new EmrBuilderService(
+			repository as never,
+			{
+				renderDefinitionModel: vi.fn()
+			} as never
+		);
+		const result = await service.listActiveDefinitionsForMobile();
+
+		expect(repository.listActiveDefinitions).toHaveBeenCalled();
+		expect(result).toHaveLength(1);
+		expect(result[0]).toMatchObject({
+			definitionId: 'opd-eye-note',
+			version: 3,
+			updatedAt: updatedAt.toISOString(),
+			cache: {
+				etag: 'W/"opd-eye-note:sha256:' + '1'.repeat(64) + '"',
+				cacheKey: expect.stringContaining('opd-eye-note:v3:sha256:'),
+				maxAgeSeconds: 900
+			}
+		});
+	});
+
+	it('returns a rendered definition model and cache metadata for active mobile consumers', async () => {
+		const publishedAt = new Date('2026-05-09T10:00:00.000Z');
+		const rendererService = {
+			renderDefinitionModel: vi.fn(() => ({
+				definitionId: 'opd-eye-note',
+				slug: 'opd-eye-note',
+				title: 'OPD Eye Note',
+				noteType: 'opd',
+				version: 3,
+				locale: 'en-IN',
+				tags: ['opd'],
+				status: 'active',
+				effectiveFrom: undefined,
+				effectiveUntil: undefined,
+				sections: [],
+				rules: [],
+				actions: [],
+				analytics: {}
+			}))
+		};
+
+		const repository = {
+			findDefinitionByDefinitionId: vi.fn(async () => ({
+				id: 'definition-1',
+				definitionId: 'opd-eye-note',
+				slug: 'opd-eye-note',
+				title: 'OPD Eye Note',
+				noteType: 'opd',
+				specialty: 'ophthalmology',
+				status: 'active',
+				version: 3,
+				versionHash: 'sha256:' + '2'.repeat(64),
+				locale: 'en-IN',
+				ownerTeam: 'ophthalmology',
+				updatedAt: new Date('2026-05-09T11:00:00.000Z'),
+				tags: ['opd']
+			})),
+			findLatestVersion: vi.fn(async () => ({
+				id: 'version-1',
+				version: 3,
+				versionHash: 'sha256:' + '2'.repeat(64),
+				payloadJson: {
+					metadata: {
+						definitionId: 'opd-eye-note',
+						slug: 'opd-eye-note',
+						title: 'OPD Eye Note',
+						noteType: 'opd',
+						version: 3,
+						status: 'active',
+						locale: 'en-IN',
+						tags: ['opd']
+					},
+					layout: { sections: [] },
+					rules: [],
+					actions: [],
+					analytics: {}
+				},
+				publishedAt
+			}))
+		} as never;
+
+		const service = new EmrBuilderService(repository as never, rendererService as never);
+		const result = await service.getPublishedDefinitionModelForMobile('opd-eye-note');
+
+		expect(result.version).toBe(3);
+		expect(result.cache.versionHash).toBe('sha256:' + '2'.repeat(64));
+		expect(result.cache.etag).toBe('W/"opd-eye-note:sha256:' + '2'.repeat(64) + '"');
+		expect(result.renderModel).toMatchObject({
+			definitionId: 'opd-eye-note'
+		});
+		expect(rendererService.renderDefinitionModel).toHaveBeenCalled();
+	});
+
+	it('rejects mobile definition sync for non-active definitions', async () => {
+		const repository = {
+			findDefinitionByDefinitionId: vi.fn(async () => ({
+				id: 'definition-1',
+				definitionId: 'opd-eye-note',
+				status: 'draft'
+			}))
+		} as never;
+
+		const service = new EmrBuilderService(repository, {
+			renderDefinitionModel: vi.fn()
+		} as never);
+
+		await expect(
+			service.getPublishedDefinitionModelForMobile('opd-eye-note')
+		).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
+	});
 });

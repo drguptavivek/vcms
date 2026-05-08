@@ -344,6 +344,37 @@ export const clinicalNoteVersions = pgTable(
 	]
 );
 
+export const mobileSubmissionResults = pgTable(
+	'mobile_submission_results',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		idempotencyKey: text('idempotency_key').notNull(),
+		pecId: integer('pec_id')
+			.notNull()
+			.references(() => pecs.id, { onDelete: 'restrict' }),
+		requestHash: text('request_hash').notNull(),
+		status: text('status').notNull().default('processing'),
+		definitionVersion: text('definition_version'),
+		definitionHash: text('definition_hash'),
+		clientMetadata: jsonb('client_metadata_json').notNull().default({}),
+		deviceMetadata: jsonb('device_metadata_json').notNull().default({}),
+		responsePayload: jsonb('response_payload_json').notNull(),
+		errorCode: text('error_code'),
+		errorMessage: text('error_message'),
+		requestId: text('request_id').notNull(),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('mobile_submission_results_user_key_uidx').on(table.userId, table.idempotencyKey),
+		index('mobile_submission_results_user_idx').on(table.userId),
+		index('mobile_submission_results_pec_idx').on(table.pecId)
+	]
+);
+
 export const emrNoteDefinitions = pgTable(
 	'emr_note_definitions',
 	{

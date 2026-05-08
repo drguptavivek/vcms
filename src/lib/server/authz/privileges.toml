@@ -155,6 +155,12 @@ roles = ["admin", "barcode_print_manager"]
 resource = "system"
 audit = true
 
+[privileges."emr.runtime.mobile_definition.view"]
+description = "Read active EMR definitions for mobile runtime sync"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
 [privileges."emr.builder.manage"]
 description = "Manage EMR note definition drafts and published versions"
 roles = ["admin", "barcode_print_manager"]

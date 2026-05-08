@@ -47,3 +47,24 @@ Draft definitions may be edited by privileged Builder users. Published definitio
 Runtime code consumes only published definitions through service contracts. Runtime behavior must be reproducible from the stored definition version and persisted runtime inputs.
 
 Builder drafts, unpublished validation experiments, and retired definitions must not leak into runtime screens unless explicitly requested by a Builder administrator in a Builder context.
+
+## XLSForm Import Coverage for PEC Forms
+
+The current `src/lib/server/modules/xlsform-import/` implementation is fixture-driven so the four PEC XLSForm forms can be imported without the xlsx parser dependency:
+
+- `src/lib/server/modules/xlsform-import/fixtures/pec-opd-register.json`
+- `src/lib/server/modules/xlsform-import/fixtures/reported-patients-record.json`
+- `src/lib/server/modules/xlsform-import/fixtures/cataract-surgery-record.json`
+- `src/lib/server/modules/xlsform-import/fixtures/cataract-followup-record.json`
+
+Each form currently maps to `EmrNoteDefinition` with section nesting (`begin_group` / `end_group`), basic field type translation, static choice metadata, and `clinical_worklist` sources for entity handoff lists.
+
+## Unsupported XLSForm Semantics (Documented)
+
+- **Calculation / default / instance fields**: not executed in EMR Builder; recorded as `unsupported-type` issues (`calculation`), but definition fields are intentionally omitted.
+- **`relevant` expressions**: not translated to EMR visibility rules yet. Recorded as `unsupported-expression` (`group-relevant`, `relevant-expression`) on import.
+- **`constraint` expressions**: numeric lower/upper bound patterns are parsed into `validation.min`/`validation.max` when possible (for simple comparisons). All other constraint logic is recorded as `unsupported-expression`.
+- **`choice_filter` / dynamic filter references**: not mapped to runtime filtering yet; recorded as `unsupported-filter`.
+- **Entity handoff metadata**: `entity` sheet rows map to `clinical_worklist` source metadata when available (`source_file`, `label_template`, `create_if`, `handoff`). If metadata is absent, a `unsupported-handoff` issue is raised and only best-effort defaults are used.
+- **Identity and name normalization**: labels are truncated for storage safety (`label <= 200`, help text `<= 500`), and IDs are slugified/uniquified to stable `field.key` values.
+- **Unsupported `select_*` variants**: unsupported or unknown field types are downgraded to `text` with an `unsupported-type` issue for manual follow-up.

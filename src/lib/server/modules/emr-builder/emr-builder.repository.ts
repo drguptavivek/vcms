@@ -37,6 +37,15 @@ export class EmrBuilderRepository {
 			.then((rows) => rows[0] as EmrNoteDefinitionRecord | undefined);
 	}
 
+	listActiveDefinitions() {
+		return this.database
+			.select()
+			.from(emrNoteDefinitions)
+			.where(eq(emrNoteDefinitions.status, 'active'))
+			.orderBy(desc(emrNoteDefinitions.updatedAt))
+			.then((rows) => rows as EmrNoteDefinitionRecord[]);
+	}
+
 	upsertDefinition(input: NewEmrNoteDefinition) {
 		return this.database
 			.insert(emrNoteDefinitions)
@@ -64,7 +73,11 @@ export class EmrBuilderRepository {
 			.then((rows) => rows[0] as EmrNoteDefinitionRecord);
 	}
 
-	setDefinitionStatus(definitionId: string, status: EmrNoteDefinitionRecord['status'], updatedBy?: string) {
+	setDefinitionStatus(
+		definitionId: string,
+		status: EmrNoteDefinitionRecord['status'],
+		updatedBy?: string
+	) {
 		return this.database
 			.update(emrNoteDefinitions)
 			.set({
