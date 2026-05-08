@@ -8,6 +8,7 @@ import { CarePathwayRepository } from '../care-pathways/care-pathway.repository'
 import { EncounterRepository } from '../encounters/encounter.repository';
 import { PatientRepository } from '../patients/patient.repository';
 import { ClinicalNoteRepository } from './clinical-note.repository';
+import { ClinicalWorklistService } from '../clinical-worklists/clinical-worklist.service';
 import type { SubmitPecOpdNoteInput } from './clinical-note.schemas';
 
 type ClinicalNoteSubmitInput = {
@@ -19,6 +20,7 @@ type ClinicalNoteSubmitInput = {
 };
 
 type NoteVersionInput = Parameters<typeof ClinicalNoteRepository.prototype.createVersion>[0];
+type NotePayload = { chiefComplaint?: string; diagnosis?: string; plan?: string };
 
 const pecOpdNoteType = 'pec_opd';
 
@@ -36,6 +38,7 @@ export class ClinicalNoteService {
 		private readonly encounterRepository = new EncounterRepository(),
 		private readonly carePathwayRepository = new CarePathwayRepository(),
 		private readonly clinicalNoteRepository = new ClinicalNoteRepository(),
+		private readonly clinicalWorklistService = new ClinicalWorklistService(),
 		private readonly runInTransaction = db.transaction.bind(db)
 	) {}
 
@@ -92,13 +95,15 @@ export class ClinicalNoteService {
 				? existingPatient
 				: await patientRepository.createForBarcode(incomingPatient);
 
+			const encounterOccurredAt = input.body.encounter.occurredAt
+				? new Date(input.body.encounter.occurredAt)
+				: new Date();
+
 			const encounter = await encounterRepository.create({
 				patientId: patient.id,
 				pecId: input.body.pecId,
 				barcodeSnapshot: patient.barcode,
-				occurredAt: input.body.encounter.occurredAt
-					? new Date(input.body.encounter.occurredAt)
-					: new Date(),
+				occurredAt: encounterOccurredAt,
 				createdBy: input.userId
 			});
 
@@ -137,6 +142,13 @@ export class ClinicalNoteService {
 				});
 			}
 
+			const { pathwayType: payloadPathwayType, ...worklistInputPayload } =
+				notePayload as NotePayload & {
+					pathwayType?: string;
+				};
+			const pathwayType =
+				carePathway.pathwayType ?? input.body.pathway.pathwayType ?? payloadPathwayType;
+
 			let noteVersion;
 			let note;
 			const notePayloadHash = buildPayloadHash(notePayload);
@@ -166,7 +178,7 @@ export class ClinicalNoteService {
 				await writeAudit(transaction, {
 					requestId: input.requestId,
 					actorUserId: input.userId,
-					action: 'clinical_note.submit',
+					action: 'emr.clinical_note.submit',
 					resourceType: 'pec',
 					resourceId: input.body.pecId,
 					reason: 'clinical_note_submit',
@@ -182,6 +194,18 @@ export class ClinicalNoteService {
 					},
 					ipAddress: input.ipAddress,
 					userAgent: input.userAgent
+				});
+
+				await this.clinicalWorklistService.createFromPecSubmission({
+					patientId: patient.id,
+					carePathwayId: carePathway.id,
+					sourceEncounterId: encounter.id,
+					sourceClinicalNoteId: note.id,
+					pathwayType,
+					pathwayAnswers: input.body.pathway.answers,
+					encounterOccurredAt,
+					...worklistInputPayload,
+					createdBy: input.userId
 				});
 
 				return {
@@ -221,10 +245,22 @@ export class ClinicalNoteService {
 				status: 'amended'
 			});
 
+			await this.clinicalWorklistService.createFromPecSubmission({
+				patientId: patient.id,
+				carePathwayId: carePathway.id,
+				sourceEncounterId: encounter.id,
+				sourceClinicalNoteId: latestNote.id,
+				pathwayType,
+				pathwayAnswers: input.body.pathway.answers,
+				encounterOccurredAt,
+				...worklistInputPayload,
+				createdBy: input.userId
+			});
+
 			await writeAudit(transaction, {
 				requestId: input.requestId,
 				actorUserId: input.userId,
-				action: 'clinical_note.submit',
+				action: 'emr.clinical_note.submit',
 				resourceType: 'pec',
 				resourceId: input.body.pecId,
 				reason: 'clinical_note_amend',

@@ -117,11 +117,42 @@ roles = ["admin", "barcode_print_manager"]
 resource = "system"
 audit = true
 
-[privileges."clinical_note.submit"]
-description = "Submit a clinical note for an allocated PEC encounter"
+[privileges."emr.patient.view"]
+description = "View EMR patient records and barcode lookup"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
+[privileges."emr.patient.create"]
+description = "Create EMR patient registrations and persist barcode-linked patient data"
 roles = ["admin", "barcode_print_manager"]
 resource = "pec"
 relationship = "allocated_pec"
+audit = true
+
+[privileges."emr.encounter.view"]
+description = "View EMR encounters by patient"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
+[privileges."emr.encounter.create"]
+description = "Create EMR encounters for a patient"
+roles = ["admin", "barcode_print_manager"]
+resource = "pec"
+relationship = "allocated_pec"
+audit = true
+
+[privileges."emr.care_pathway.view"]
+description = "View EMR care pathways by patient"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
+[privileges."emr.care_pathway.create"]
+description = "Create EMR care pathways for an encounter"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
 audit = true
 
 [privileges."emr.clinical_note.submit"]

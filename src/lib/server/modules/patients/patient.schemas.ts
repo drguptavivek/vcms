@@ -21,3 +21,22 @@ export const patientDemographicsSchema = z.object({
 	phone: z.string().trim().max(40).optional(),
 	address: z.string().trim().max(500).optional()
 });
+
+export const patientCreateSchema = z.object({
+	barcode: patientBarcodeSchema,
+	primaryPecId: z.number().int().positive(),
+	fullName: z.string().trim().min(1).max(200),
+	sex: patientSexSchema,
+	dateOfBirth: z
+		.string()
+		.trim()
+		.regex(/^\d{4}-\d{2}-\d{2}$/)
+		.optional(),
+	ageYears: z.number().int().min(0).max(130).optional(),
+	phone: z.string().trim().max(40).optional(),
+	address: z.string().trim().max(500).optional()
+});
+
+export const patientLookupSchema = z.object({
+	barcode: patientBarcodeSchema
+});

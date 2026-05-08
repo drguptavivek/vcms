@@ -24,6 +24,10 @@ const clinicalNoteRepository = vi.hoisted(() => ({
 	updateCurrentVersion: vi.fn()
 }));
 
+const clinicalWorklistService = vi.hoisted(() => ({
+	createFromPecSubmission: vi.fn()
+}));
+
 vi.mock('../patients/patient.repository', () => ({
 	PatientRepository: class {
 		constructor() {
@@ -52,6 +56,14 @@ vi.mock('./clinical-note.repository', () => ({
 	ClinicalNoteRepository: class {
 		constructor() {
 			return clinicalNoteRepository;
+		}
+	}
+}));
+
+vi.mock('../clinical-worklists/clinical-worklist.service', () => ({
+	ClinicalWorklistService: class {
+		constructor() {
+			return clinicalWorklistService;
 		}
 	}
 }));
@@ -103,6 +115,7 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			undefined,
+			clinicalWorklistService as never,
 			runInTransactionMock([{ id: 4, active: true }]) as never
 		);
 
@@ -187,6 +200,16 @@ describe('ClinicalNoteService', () => {
 				pathwayType: 'pec_opd'
 			})
 		);
+		expect(clinicalWorklistService.createFromPecSubmission).toHaveBeenCalledWith(
+			expect.objectContaining({
+				patientId: 'patient-1',
+				carePathwayId: 'pathway-1',
+				sourceEncounterId: 'encounter-1',
+				sourceClinicalNoteId: 'note-1',
+				pathwayType: 'pec_opd',
+				encounterOccurredAt: new Date('2026-05-09T09:15:00')
+			})
+		);
 		expect(clinicalNoteRepository.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				patientId: 'patient-1',
@@ -218,7 +241,7 @@ describe('ClinicalNoteService', () => {
 			expect.anything(),
 			expect.objectContaining({
 				requestId: 'req-1',
-				action: 'clinical_note.submit',
+				action: 'emr.clinical_note.submit',
 				resourceType: 'pec',
 				resourceId: 4,
 				reason: 'clinical_note_submit',
@@ -242,6 +265,7 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			undefined,
+			clinicalWorklistService as never,
 			runInTransactionMock([{ id: 4, active: true }] as never) as never
 		);
 
@@ -342,6 +366,23 @@ describe('ClinicalNoteService', () => {
 				status: 'amended'
 			})
 		);
+		expect(clinicalWorklistService.createFromPecSubmission).toHaveBeenCalledTimes(2);
+		expect(clinicalWorklistService.createFromPecSubmission).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				pathwayType: 'pec_opd',
+				sourceClinicalNoteId: 'note-1',
+				sourceEncounterId: 'encounter-1'
+			})
+		);
+		expect(clinicalWorklistService.createFromPecSubmission).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				pathwayType: 'pec_opd',
+				sourceClinicalNoteId: 'note-1',
+				sourceEncounterId: 'encounter-1'
+			})
+		);
 	});
 
 	it('rejects PEC OPD submissions when PEC lookup fails', async () => {
@@ -350,6 +391,7 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			undefined,
+			clinicalWorklistService as never,
 			runInTransactionMock([]) as never
 		);
 

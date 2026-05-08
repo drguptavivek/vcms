@@ -32,6 +32,13 @@ export const carePathwayStatus = pgEnum('care_pathway_status', [
 	'cancelled'
 ]);
 export const clinicalNoteStatus = pgEnum('clinical_note_status', ['draft', 'signed', 'amended']);
+export const emrDefinitionStatus = pgEnum('emr_definition_status', ['draft', 'active', 'retired']);
+export const clinicalWorklistStatus = pgEnum('clinical_worklist_status', [
+	'open',
+	'in_progress',
+	'completed',
+	'cancelled'
+]);
 
 export const masSettings = pgTable('mas_settings', {
 	key: text('key').primaryKey(),
@@ -337,6 +344,118 @@ export const clinicalNoteVersions = pgTable(
 	]
 );
 
+export const emrNoteDefinitions = pgTable(
+	'emr_note_definitions',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		definitionId: text('definition_id').notNull(),
+		slug: text('slug').notNull(),
+		title: text('title').notNull(),
+		noteType: text('note_type').notNull(),
+		specialty: text('specialty'),
+		status: emrDefinitionStatus('status').notNull().default('draft'),
+		version: integer('version').notNull().default(0),
+		versionHash: text('version_hash').notNull(),
+		locale: text('locale').notNull().default('en-IN'),
+		tags: jsonb('tags_json').notNull().default([]),
+		ownerTeam: text('owner_team'),
+		effectiveFrom: timestamp('effective_from'),
+		effectiveUntil: timestamp('effective_until'),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('emr_note_definitions_definition_id_uidx').on(table.definitionId),
+		uniqueIndex('emr_note_definitions_slug_uidx').on(table.slug),
+		index('emr_note_definitions_status_idx').on(table.status),
+		check('emr_note_definitions_version_check', sql`${table.version} >= 0`)
+	]
+);
+
+export const emrNoteDefinitionDrafts = pgTable(
+	'emr_note_definition_drafts',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		definitionId: uuid('definition_id')
+			.notNull()
+			.references(() => emrNoteDefinitions.id, { onDelete: 'cascade' }),
+		payloadJson: jsonb('payload_json').notNull(),
+		versionHash: text('version_hash').notNull(),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('emr_note_definition_drafts_definition_id_uidx').on(table.definitionId),
+		index('emr_note_definition_drafts_updated_at_idx').on(table.updatedAt)
+	]
+);
+
+export const emrNoteDefinitionVersions = pgTable(
+	'emr_note_definition_versions',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		definitionId: uuid('definition_id')
+			.notNull()
+			.references(() => emrNoteDefinitions.id, { onDelete: 'cascade' }),
+		version: integer('version').notNull(),
+		versionHash: text('version_hash').notNull(),
+		changeType: text('change_type').notNull().default('publish'),
+		payloadJson: jsonb('payload_json').notNull(),
+		publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
+		publishedAt: timestamp('published_at').notNull().defaultNow(),
+		reason: text('reason').notNull().default('')
+	},
+	(table) => [
+		uniqueIndex('emr_note_definition_versions_definition_version_uidx').on(
+			table.definitionId,
+			table.version
+		),
+		index('emr_note_definition_versions_definition_id_idx').on(table.definitionId),
+		check('emr_note_definition_versions_version_check', sql`${table.version} > 0`)
+	]
+);
+
+export const clinicalWorklists = pgTable(
+	'clinical_worklists',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		patientId: uuid('patient_id')
+			.notNull()
+			.references(() => patients.id, { onDelete: 'restrict' }),
+		carePathwayId: uuid('care_pathway_id')
+			.notNull()
+			.references(() => carePathways.id, { onDelete: 'restrict' }),
+		sourceEncounterId: uuid('source_encounter_id')
+			.notNull()
+			.references(() => encounters.id, { onDelete: 'restrict' }),
+		sourceClinicalNoteId: uuid('source_clinical_note_id')
+			.notNull()
+			.references(() => clinicalNotes.id, { onDelete: 'restrict' }),
+		worklistType: text('worklist_type').notNull(),
+		status: clinicalWorklistStatus('status').notNull().default('open'),
+		dueDate: timestamp('due_date'),
+		summary: jsonb('summary_json').notNull().default({}),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('clinical_worklists_patient_encounter_type_uidx').on(
+			table.patientId,
+			table.carePathwayId,
+			table.sourceEncounterId,
+			table.worklistType
+		),
+		index('clinical_worklists_patient_idx').on(table.patientId),
+		index('clinical_worklists_status_due_idx').on(table.status, table.dueDate),
+		check('clinical_worklists_type_not_blank_check', sql`length(trim(${table.worklistType})) > 0`)
+	]
+);
+
 export const auditLogs = pgTable('audit_logs', {
 	id: uuid('id').defaultRandom().primaryKey(),
 	requestId: text('request_id').notNull(),
@@ -363,6 +482,28 @@ export const appErrorLogs = pgTable('app_error_logs', {
 	details: jsonb('details'),
 	createdAt: timestamp('created_at').notNull().defaultNow()
 });
+
+export const emrNoteDefinitionRelations = relations(emrNoteDefinitions, ({ many }) => ({
+	drafts: many(emrNoteDefinitionDrafts),
+	versions: many(emrNoteDefinitionVersions)
+}));
+
+export const emrNoteDefinitionDraftRelations = relations(emrNoteDefinitionDrafts, ({ one }) => ({
+	definition: one(emrNoteDefinitions, {
+		fields: [emrNoteDefinitionDrafts.definitionId],
+		references: [emrNoteDefinitions.id]
+	})
+}));
+
+export const emrNoteDefinitionVersionRelations = relations(
+	emrNoteDefinitionVersions,
+	({ one }) => ({
+		definition: one(emrNoteDefinitions, {
+			fields: [emrNoteDefinitionVersions.definitionId],
+			references: [emrNoteDefinitions.id]
+		})
+	})
+);
 
 export const teamRelations = relations(teams, ({ many }) => ({ pecs: many(pecs) }));
 export const pecRelations = relations(pecs, ({ one, many }) => ({

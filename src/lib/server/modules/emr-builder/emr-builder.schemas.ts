@@ -13,6 +13,12 @@ const descriptionSchema = z.string().trim().min(1).max(2000);
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const jsonPrimitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
+const emrSnomedMetadataSchema = z.object({
+	conceptId: z.string().trim().min(1).regex(/^\d+$/),
+	preferredTerm: z.string().trim().min(1).max(300).optional(),
+	displayTerm: z.string().trim().min(1).max(300).optional()
+});
+
 export const emrDefinitionStatusSchema = z.enum(['draft', 'active', 'retired']);
 export const emrFieldTypeSchema = z.enum([
 	'text',
@@ -161,6 +167,7 @@ export const emrFieldSchema = z
 		choiceSet: emrChoiceSetSchema.optional(),
 		validation: emrFieldValidationSchema.optional(),
 		analytics: z.array(emrAnalyticsHintSchema).max(20).default([]),
+		snomed: emrSnomedMetadataSchema.optional(),
 		required: z.boolean().default(false),
 		readOnly: z.boolean().default(false),
 		hidden: z.boolean().default(false),

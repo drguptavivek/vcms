@@ -197,50 +197,125 @@ describe('emr note definition schema', () => {
 		expect(hashWithExistingHash).toBe(hash);
 	});
 
-	it('rejects impossible effective dates in metadata ranges', () => {
-		expect(() =>
-			emrNoteDefinitionSchema.parse({
-			...baseDefinition,
-			metadata: {
-				...baseDefinition.metadata,
-				effectiveFrom: '2026-05-09T00:00:00Z',
-				effectiveUntil: '2025-05-09T00:00:00Z'
-			}
-			}
-		)
-		).toThrow();
-	});
-
-	it('requires at least one field choice when a code system is named', () => {
-		expect(() =>
-			emrNoteDefinitionSchema.parse({
+	it('accepts optional SNOMED metadata on note fields', () => {
+		const parsed = parseEmrNoteDefinition({
 			...baseDefinition,
 			layout: {
 				sections: [
 					{
-						id: 'bad',
-						title: 'Bad field',
-						order: 0,
+						...baseDefinition.layout.sections[0],
 						fields: [
 							{
-								id: 'bad',
-								key: 'bad',
-								label: 'Bad field',
-								type: 'single_choice',
-								order: 0,
-								choiceSet: {
-									source: {
-										kind: 'terminology',
-										name: 'icd10',
-										filter: { version: '11' }
-									}
+								...baseDefinition.layout.sections[0].fields[0],
+								snomed: {
+									conceptId: '247000',
+									preferredTerm: 'Visual acuity',
+									displayTerm: 'Visual Acuity',
 								}
 							}
 						]
 					}
 				]
 			}
-				})
+		});
+
+		expect(parsed.layout.sections[0].fields[0].snomed).toMatchObject({
+			conceptId: '247000',
+			preferredTerm: 'Visual acuity'
+		});
+	});
+
+	it('rejects non-numeric SNOMED concept identifiers', () => {
+		expect(() =>
+			emrNoteDefinitionSchema.parse({
+				...baseDefinition,
+				layout: {
+					sections: [
+						{
+							...baseDefinition.layout.sections[0],
+							fields: [
+								{
+									...baseDefinition.layout.sections[0].fields[0],
+									snomed: {
+										conceptId: 'SNOMED-123'
+									}
+								}
+							]
+						}
+					]
+				}
+			})
+		).toThrow();
+	});
+
+	it('keeps SNOMED metadata in the definition hash', () => {
+		const baseHash = computeEmrNoteDefinitionVersionHash(baseDefinition);
+		const withSnomed = computeEmrNoteDefinitionVersionHash({
+			...baseDefinition,
+			layout: {
+				sections: [
+					{
+						...baseDefinition.layout.sections[0],
+						fields: [
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								snomed: {
+									conceptId: '247000',
+									preferredTerm: 'Visual acuity'
+								}
+							}
+						]
+					}
+				]
+			}
+		});
+
+		expect(withSnomed).not.toBe(baseHash);
+	});
+
+	it('rejects impossible effective dates in metadata ranges', () => {
+		expect(() =>
+			emrNoteDefinitionSchema.parse({
+				...baseDefinition,
+				metadata: {
+					...baseDefinition.metadata,
+					effectiveFrom: '2026-05-09T00:00:00Z',
+					effectiveUntil: '2025-05-09T00:00:00Z'
+				}
+			})
+		).toThrow();
+	});
+
+	it('requires at least one field choice when a code system is named', () => {
+		expect(() =>
+			emrNoteDefinitionSchema.parse({
+				...baseDefinition,
+				layout: {
+					sections: [
+						{
+							id: 'bad',
+							title: 'Bad field',
+							order: 0,
+							fields: [
+								{
+									id: 'bad',
+									key: 'bad',
+									label: 'Bad field',
+									type: 'single_choice',
+									order: 0,
+									choiceSet: {
+										source: {
+											kind: 'terminology',
+											name: 'icd10',
+											filter: { version: '11' }
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			})
 			).not.toThrow();
 		});
 	});

@@ -8,6 +8,10 @@ type Database = typeof db;
 export class PatientRepository {
 	constructor(private readonly database: Database = db) {}
 
+	getById(id: string) {
+		return this.database.select().from(patients).where(eq(patients.id, id)).limit(1).then((rows) => rows[0]);
+	}
+
 	async findByBarcode(barcode: string) {
 		const rows = await this.database
 			.select()
