@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "vcms",
+  "project_id": "6291af30-bbd7-4112-8cec-7ccf0834d0e8"
+}
