@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
 	computeEmrNoteDefinitionVersionHash,
 	emrNoteDefinitionSchema,
-	parseEmrNoteDefinition
+	parseEmrNoteDefinition,
+	emrBuilderDefinitionQuerySchema,
+	emrBuilderPublishDraftSchema,
+	emrBuilderSaveDraftSchema
 } from './emr-builder.schemas';
 
 const baseDefinition = {
@@ -210,7 +213,7 @@ describe('emr note definition schema', () => {
 								snomed: {
 									conceptId: '247000',
 									preferredTerm: 'Visual acuity',
-									displayTerm: 'Visual Acuity',
+									displayTerm: 'Visual Acuity'
 								}
 							}
 						]
@@ -273,6 +276,161 @@ describe('emr note definition schema', () => {
 		expect(withSnomed).not.toBe(baseHash);
 	});
 
+	it('validates save draft payloads', () => {
+		expect(() => emrBuilderSaveDraftSchema.parse({ definition: baseDefinition })).not.toThrow();
+		expect(() =>
+			emrBuilderSaveDraftSchema.parse({
+				definition: { ...baseDefinition, metadata: {} }
+			})
+		).toThrow();
+	});
+
+	it('validates publish draft payloads', () => {
+		expect(() =>
+			emrBuilderPublishDraftSchema.parse({
+				definitionId: 'opd-eye-note',
+				reason: 'initial publish'
+			})
+		).not.toThrow();
+	});
+
+	it('validates definition query schema', () => {
+		expect(
+			emrBuilderDefinitionQuerySchema.parse({
+				definitionId: 'opd-eye-note'
+			})
+		).toMatchObject({ definitionId: 'opd-eye-note' });
+	});
+
+	it('parses XLSForm-style bind metadata with structured expressions only', () => {
+		const parsed = emrNoteDefinitionSchema.parse({
+			...baseDefinition,
+			layout: {
+				sections: [
+					{
+						...baseDefinition.layout.sections[0],
+						fields: [
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								xlsv1Name: 'right_eye_ucva',
+								odkBind: {
+									xlsformName: 'right_eye_ucva',
+									required: { value: true },
+									relevant: {
+										op: 'equals',
+										args: [{ field: 'patient_type' }, { value: 'new' }]
+									},
+									constraint: {
+										op: 'not_equals',
+										args: [{ field: 'right-eye-ucva' }, { value: '' }]
+									},
+									constraintMessage: 'Select visual acuity.',
+									calculation: {
+										fn: 'coalesce',
+										args: [{ field: 'right-eye-ucva' }, { value: 'missing' }]
+									},
+									appearance: 'minimal'
+								}
+							}
+						]
+					}
+				]
+			}
+		});
+
+		expect(parsed.layout.sections[0].fields[0].odkBind?.constraintMessage).toBe(
+			'Select visual acuity.'
+		);
+	});
+
+	it('rejects raw XLSForm expression strings in bind metadata', () => {
+		expect(() =>
+			emrNoteDefinitionSchema.parse({
+				...baseDefinition,
+				layout: {
+					sections: [
+						{
+							...baseDefinition.layout.sections[0],
+							fields: [
+								{
+									...baseDefinition.layout.sections[0].fields[0],
+									odkBind: {
+										relevant: '${patient_type} = "new"'
+									}
+								}
+							]
+						}
+					]
+				}
+			})
+		).toThrow();
+	});
+
+	it('supports external clinical worklist choice sources', () => {
+		const parsed = emrNoteDefinitionSchema.parse({
+			...baseDefinition,
+			layout: {
+				sections: [
+					{
+						...baseDefinition.layout.sections[0],
+						fields: [
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								choiceSet: {
+									source: {
+										kind: 'clinical_worklist',
+										name: 'cataract-reported',
+										filterExpression: {
+											op: 'equals',
+											args: [{ field: 'patient_barcode' }, { field: 'barcode' }]
+										},
+										valueField: 'patient_id',
+										labelField: 'patient_name'
+									}
+								}
+							}
+						]
+					}
+				]
+			}
+		});
+
+		expect(parsed.layout.sections[0].fields[0].choiceSet?.source?.kind).toBe('clinical_worklist');
+	});
+
+	it('allows repeat metadata only on repeatable groups', () => {
+		const repeatDefinition = {
+			...baseDefinition,
+			layout: {
+				sections: [
+					{
+						id: 'medications',
+						title: 'Medications',
+						kind: 'repeatable_group',
+						order: 0,
+						odk: {
+							repeat: {
+								min: 0,
+								max: 5,
+								count: { field: 'medication_count' }
+							}
+						}
+					}
+				]
+			}
+		};
+
+		expect(() => emrNoteDefinitionSchema.parse(repeatDefinition)).not.toThrow();
+		expect(() =>
+			emrNoteDefinitionSchema.parse({
+				...repeatDefinition,
+				layout: {
+					sections: [{ ...repeatDefinition.layout.sections[0], kind: 'section' }]
+				}
+			})
+		).toThrow();
+	});
+
 	it('rejects impossible effective dates in metadata ranges', () => {
 		expect(() =>
 			emrNoteDefinitionSchema.parse({
@@ -316,6 +474,6 @@ describe('emr note definition schema', () => {
 					]
 				}
 			})
-			).not.toThrow();
-		});
+		).not.toThrow();
 	});
+});

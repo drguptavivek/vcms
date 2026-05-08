@@ -20,6 +20,7 @@ The runtime is the first implementation priority. It must be usable with hand-bu
 - `security.md`: runtime privileges, audit events, rate limits, and safe errors.
 - `testing.md`: expected runtime unit, route, DB, component, and smoke coverage.
 - `user-guide.md`: clinician and operator workflow outline.
+- `mobile.md`: offline-first staff mobile collection plan against published runtime definitions.
 
 ## Related Domains
 
@@ -27,8 +28,7 @@ The runtime is the first implementation priority. It must be usable with hand-bu
 - `../barcode/`: existing barcode allocation and print lifecycle.
 - `../identity-access/`: users, roles, ReBAC, and privilege registry.
 - `../observability-security/`: API wrapper, logging, audit, rate limiting, and safe errors.
-- Future mobile collection app: staff-facing offline-capable client that syncs published EMR
-  definitions, captures drafts against barcodes, and submits notes through the runtime APIs.
+- Staff mobile collection plan (`mobile.md`) covers offline drafts, definition versioning, barcode capture, sync, conflict handling, and audit contracts.
 
 ## Related Plan
 

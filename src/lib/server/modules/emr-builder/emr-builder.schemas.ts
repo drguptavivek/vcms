@@ -12,6 +12,64 @@ const labelSchema = z.string().trim().min(1).max(200);
 const descriptionSchema = z.string().trim().min(1).max(2000);
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const jsonPrimitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const expressionValueSchema = jsonPrimitiveSchema.or(z.array(jsonPrimitiveSchema));
+
+export type EmrExpression =
+	| { field: string }
+	| { value: z.infer<typeof expressionValueSchema> }
+	| { fn: 'selected' | 'count-selected' | 'coalesce'; args: EmrExpression[] }
+	| {
+			op:
+				| 'equals'
+				| 'not_equals'
+				| 'in'
+				| 'not_in'
+				| 'contains'
+				| 'greater_than'
+				| 'greater_than_or_equal'
+				| 'less_than'
+				| 'less_than_or_equal'
+				| 'and'
+				| 'or'
+				| 'not'
+				| 'add'
+				| 'subtract'
+				| 'multiply'
+				| 'divide';
+			args: EmrExpression[];
+	  };
+
+export const emrExpressionSchema: z.ZodType<EmrExpression> = z.lazy(() =>
+	z.union([
+		z.object({ field: identifierSchema }),
+		z.object({ value: expressionValueSchema }),
+		z.object({
+			fn: z.enum(['selected', 'count-selected', 'coalesce']),
+			args: z.array(emrExpressionSchema).min(1).max(20)
+		}),
+		z.object({
+			op: z.enum([
+				'equals',
+				'not_equals',
+				'in',
+				'not_in',
+				'contains',
+				'greater_than',
+				'greater_than_or_equal',
+				'less_than',
+				'less_than_or_equal',
+				'and',
+				'or',
+				'not',
+				'add',
+				'subtract',
+				'multiply',
+				'divide'
+			]),
+			args: z.array(emrExpressionSchema).min(1).max(20)
+		})
+	])
+);
 
 const emrSnomedMetadataSchema = z.object({
 	conceptId: z.string().trim().min(1).regex(/^\d+$/),
@@ -110,9 +168,12 @@ export const emrChoiceSetSchema = z
 		choices: z.array(emrChoiceSchema).min(1).max(500).optional(),
 		source: z
 			.object({
-				kind: z.enum(['master_data', 'terminology', 'api']),
+				kind: z.enum(['master_data', 'terminology', 'clinical_worklist', 'api']),
 				name: identifierSchema,
-				filter: z.record(z.string(), jsonPrimitiveSchema).optional()
+				filter: z.record(z.string(), jsonPrimitiveSchema).optional(),
+				filterExpression: emrExpressionSchema.optional(),
+				valueField: identifierSchema.optional(),
+				labelField: identifierSchema.optional()
 			})
 			.optional()
 	})
@@ -154,22 +215,37 @@ export const emrAnalyticsHintSchema = z.object({
 	includeInDefaultReports: z.boolean().default(false)
 });
 
+export const emrOdkBindSchema = z.object({
+	xlsformName: z.string().trim().min(1).max(120).optional(),
+	required: emrExpressionSchema.optional(),
+	relevant: emrExpressionSchema.optional(),
+	constraint: emrExpressionSchema.optional(),
+	constraintMessage: z.string().trim().min(1).max(500).optional(),
+	calculation: emrExpressionSchema.optional(),
+	readOnly: emrExpressionSchema.optional(),
+	appearance: z.string().trim().min(1).max(200).optional(),
+	choiceSource: z.string().trim().min(1).max(200).optional()
+});
+
 export const emrFieldSchema = z
 	.object({
 		id: identifierSchema,
 		key: identifierSchema,
 		label: labelSchema,
 		type: emrFieldTypeSchema,
+		xlsv1Name: z.string().trim().min(1).max(120).optional(),
 		helpText: z.string().trim().min(1).max(500).optional(),
 		placeholder: z.string().trim().min(1).max(200).optional(),
 		unit: z.string().trim().min(1).max(40).optional(),
-		defaultValue: jsonPrimitiveSchema.or(z.array(jsonPrimitiveSchema)).optional(),
+		defaultValue: expressionValueSchema.or(emrExpressionSchema).optional(),
 		choiceSet: emrChoiceSetSchema.optional(),
 		validation: emrFieldValidationSchema.optional(),
+		odkBind: emrOdkBindSchema.optional(),
 		analytics: z.array(emrAnalyticsHintSchema).max(20).default([]),
 		snomed: emrSnomedMetadataSchema.optional(),
 		required: z.boolean().default(false),
 		readOnly: z.boolean().default(false),
+		readonly: z.boolean().optional(),
 		hidden: z.boolean().default(false),
 		width: z.enum(['full', 'half', 'third', 'quarter']).default('full'),
 		order: z.number().int().min(0)
@@ -249,22 +325,59 @@ export const emrLayoutSectionSchema: z.ZodType<{
 	fields: z.infer<typeof emrFieldSchema>[];
 	sections: EmrLayoutSection[];
 	rules: z.infer<typeof emrRuleSchema>[];
+	odk?: {
+		xlsformName?: string;
+		appearance?: string;
+		displayNote?: string;
+		repeat?: {
+			count?: EmrExpression;
+			min?: number;
+			max?: number;
+		};
+	};
 	order: number;
 	collapsible: boolean;
 	defaultCollapsed: boolean;
 }> = z.lazy(() =>
-	z.object({
-		id: identifierSchema,
-		title: labelSchema,
-		kind: emrSectionKindSchema.default('section'),
-		description: descriptionSchema.optional(),
-		fields: z.array(emrFieldSchema).max(200).default([]),
-		sections: z.array(emrLayoutSectionSchema).max(50).default([]),
-		rules: z.array(emrRuleSchema).max(100).default([]),
-		order: z.number().int().min(0),
-		collapsible: z.boolean().default(false),
-		defaultCollapsed: z.boolean().default(false)
-	})
+	z
+		.object({
+			id: identifierSchema,
+			title: labelSchema,
+			kind: emrSectionKindSchema.default('section'),
+			description: descriptionSchema.optional(),
+			fields: z.array(emrFieldSchema).max(200).default([]),
+			sections: z.array(emrLayoutSectionSchema).max(50).default([]),
+			rules: z.array(emrRuleSchema).max(100).default([]),
+			odk: z
+				.object({
+					xlsformName: z.string().trim().min(1).max(120).optional(),
+					appearance: z.string().trim().min(1).max(200).optional(),
+					displayNote: z.string().trim().min(1).max(1000).optional(),
+					repeat: z
+						.object({
+							count: emrExpressionSchema.optional(),
+							min: z.number().int().min(0).optional(),
+							max: z.number().int().min(1).optional()
+						})
+						.refine(
+							(value) =>
+								value.min === undefined || value.max === undefined || value.min <= value.max,
+							{
+								message: 'repeat min must be less than or equal to max.',
+								path: ['max']
+							}
+						)
+						.optional()
+				})
+				.optional(),
+			order: z.number().int().min(0),
+			collapsible: z.boolean().default(false),
+			defaultCollapsed: z.boolean().default(false)
+		})
+		.refine((value) => value.kind === 'repeatable_group' || !value.odk?.repeat, {
+			message: 'repeat metadata is only allowed for repeatable_group sections.',
+			path: ['odk', 'repeat']
+		})
 );
 
 export const emrDefinitionActionSchema = z.object({
@@ -299,6 +412,26 @@ export const emrNoteDefinitionSchema = z.object({
 		.string()
 		.regex(/^sha256:[a-f0-9]{64}$/)
 		.optional()
+});
+
+export const emrBuilderDefinitionIdSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(120)
+	.regex(/^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/);
+
+export const emrBuilderSaveDraftSchema = z.object({
+	definition: emrNoteDefinitionSchema
+});
+
+export const emrBuilderPublishDraftSchema = z.object({
+	definitionId: emrBuilderDefinitionIdSchema,
+	reason: z.string().trim().min(1).max(1000).optional()
+});
+
+export const emrBuilderDefinitionQuerySchema = z.object({
+	definitionId: emrBuilderDefinitionIdSchema
 });
 
 export function parseEmrNoteDefinition(input: unknown): EmrNoteDefinition {
@@ -347,6 +480,7 @@ export type EmrChoice = z.infer<typeof emrChoiceSchema>;
 export type EmrChoiceSet = z.infer<typeof emrChoiceSetSchema>;
 export type EmrFieldValidation = z.infer<typeof emrFieldValidationSchema>;
 export type EmrAnalyticsHint = z.infer<typeof emrAnalyticsHintSchema>;
+export type EmrOdkBind = z.infer<typeof emrOdkBindSchema>;
 export type EmrField = z.infer<typeof emrFieldSchema>;
 export type EmrRuleAction = z.infer<typeof emrRuleActionSchema>;
 export type EmrRule = z.infer<typeof emrRuleSchema>;

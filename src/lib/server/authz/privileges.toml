@@ -155,6 +155,12 @@ roles = ["admin", "barcode_print_manager"]
 resource = "system"
 audit = true
 
+[privileges."emr.builder.manage"]
+description = "Manage EMR note definition drafts and published versions"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = true
+
 [privileges."emr.clinical_note.submit"]
 description = "Submit an EMR clinical note for an allocated PEC encounter"
 roles = ["admin", "barcode_print_manager"]

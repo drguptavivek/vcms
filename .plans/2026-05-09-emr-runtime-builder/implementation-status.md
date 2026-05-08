@@ -13,6 +13,13 @@ implementation_status: planning
 
 Architecture planning documentation has been created for a runtime-first EMR and a dedicated EMR Builder module. No application code, schemas, routes, migrations, or tests are implemented by this planning pass.
 
+### VCMS-CPF Planning Update
+
+- Added focused mobile planning in `docs/domains/emr-runtime/mobile.md`.
+- Covered stack-neutral architecture, auth/session bootstrap, offline encrypted draft flow, barcode scan/manual capture, definition sync/versioning, local XLSForm-like validation/rendering, retry/idempotency behavior, conflict handling, and audit/security controls.
+- Added ODK Collect parity mapping for migration planning and interoperability assessment.
+- Documented the mobile API contract area for sync, drafts, conflict responses, and submit.
+
 ## Planning Decisions Captured
 
 - Runtime comes before the Builder.
@@ -24,9 +31,11 @@ Architecture planning documentation has been created for a runtime-first EMR and
 - Runtime and Builder APIs use separate `/api/v1` route areas.
 - Route security requirements apply from the first implementation pass.
 - Focused Spark subagents should own bounded implementation, Svelte autofix, security audit, and documentation review passes.
+- Staff mobile collection is planned as a dedicated delivery plane and stays within EMR runtime contracts (published definitions only, version-tied drafts, and auditable mutations).
 
 ## Not Started
 
+- VCMS-CPF planning-to-code decomposition for mobile sync, encrypted draft store, and conflict-state handling.
 - EMR runtime database schema.
 - EMR Builder database schema.
 - Runtime patient registration and encounter screens.
@@ -40,4 +49,6 @@ Architecture planning documentation has been created for a runtime-first EMR and
 
 ## Next Implementation Gate
 
+- Finalize mobile API/error/conflict contract with security subagent review before implementation.
+- Confirm encrypted draft and key-management approach before code handoff.
 Before code starts, create or claim Beads issues for the runtime data model, runtime service/API surface, builder definition model, and security review. The first implementation pass should prove barcode uniqueness and immutable signed notes with tests before expanding UI workflows.

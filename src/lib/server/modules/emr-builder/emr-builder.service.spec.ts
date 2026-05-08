@@ -223,4 +223,85 @@ describe('EmrBuilderService', () => {
 			code: 'NOT_FOUND'
 		});
 	});
+
+	it('returns a definition when it exists', async () => {
+		const definition = {
+			id: 'definition-1',
+			definitionId: 'opd-eye-note',
+			version: 1,
+			title: 'OPD Eye Note',
+			slug: 'opd-eye-note'
+		} as const;
+
+		const repository = {
+			findDefinitionByDefinitionId: vi.fn(async () => definition)
+		};
+
+		const service = new EmrBuilderService(repository as never);
+		const result = await service.getDefinition('opd-eye-note');
+
+		expect(repository.findDefinitionByDefinitionId).toHaveBeenCalledWith('opd-eye-note');
+		expect(result).toMatchObject(definition);
+	});
+
+	it('throws not found when getting a missing definition', async () => {
+		const repository = {
+			findDefinitionByDefinitionId: vi.fn(async () => undefined)
+		};
+
+		const service = new EmrBuilderService(repository as never);
+		await expect(service.getDefinition('missing-definition')).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
+	});
+
+	it('returns definition and latest draft record when requesting draft', async () => {
+		const definition = {
+			id: 'definition-1',
+			definitionId: 'opd-eye-note',
+			version: 1,
+			title: 'OPD Eye Note',
+			slug: 'opd-eye-note'
+		} as const;
+		const draft = {
+			id: 'draft-1',
+			definitionId: 'definition-1',
+			versionHash: 'sha256:' + 'a'.repeat(64),
+			payloadJson: baseDefinition()
+		} as const;
+
+		const repository = {
+			findDefinitionByDefinitionId: vi.fn(async () => definition),
+			findDraftByDefinitionId: vi.fn(async () => draft)
+		};
+
+		const service = new EmrBuilderService(repository as never);
+		const result = await service.getDraft('opd-eye-note');
+
+		expect(result).toMatchObject({
+			definition,
+			draft
+		});
+	});
+
+	it('returns an empty draft when definition has no draft saved', async () => {
+		const definition = {
+			id: 'definition-1',
+			definitionId: 'opd-eye-note',
+			version: 1,
+			title: 'OPD Eye Note',
+			slug: 'opd-eye-note'
+		} as const;
+
+		const repository = {
+			findDefinitionByDefinitionId: vi.fn(async () => definition),
+			findDraftByDefinitionId: vi.fn(async () => undefined)
+		};
+
+		const service = new EmrBuilderService(repository as never);
+		const result = await service.getDraft('opd-eye-note');
+
+		expect(result.definition).toMatchObject(definition);
+		expect(result.draft).toBeUndefined();
+	});
 });

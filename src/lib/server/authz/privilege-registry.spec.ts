@@ -19,4 +19,12 @@ describe('privilege registry', () => {
 			audit: true
 		});
 	});
+
+	it('loads EMR builder management privilege', () => {
+		expect(getPrivilege('emr.builder.manage')).toMatchObject({
+			resource: 'system',
+			audit: true,
+			roles: expect.arrayContaining(['admin'])
+		});
+	});
 });

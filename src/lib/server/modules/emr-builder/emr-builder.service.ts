@@ -28,6 +28,11 @@ export type EmrBuilderPublishResult = {
 	version: EmrNoteDefinitionVersionRecord;
 };
 
+export type EmrBuilderDraftResult = {
+	definition: EmrNoteDefinitionRecord;
+	draft: Awaited<ReturnType<EmrBuilderRepository['findDraftByDefinitionId']>>;
+};
+
 export class EmrBuilderService {
 	constructor(private readonly repository: EmrBuilderRepository = new EmrBuilderRepository()) {}
 
@@ -122,6 +127,24 @@ export class EmrBuilderService {
 			}
 			return this.repository.listVersions(definition.id);
 		});
+	}
+
+	getDefinition(definitionId: string) {
+		return this.repository.findDefinitionByDefinitionId(definitionId).then((definition) => {
+			if (!definition) {
+				throw notFound('Definition not found.');
+			}
+			return definition;
+		});
+	}
+
+	async getDraft(definitionId: string): Promise<EmrBuilderDraftResult> {
+		const definition = await this.repository.findDefinitionByDefinitionId(definitionId);
+		if (!definition) {
+			throw notFound('Definition not found.');
+		}
+		const draft = await this.repository.findDraftByDefinitionId(definition.id);
+		return { definition, draft };
 	}
 
 	private buildDefinitionRecord(
