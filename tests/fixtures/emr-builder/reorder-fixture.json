@@ -1,0 +1,57 @@
+{
+	"definitionId": "pec-visit",
+	"slug": "pec-visit-v1",
+	"title": "PEC OPD Baseline",
+	"status": "draft",
+	"version": 1,
+	"locale": "en-IN",
+	"sections": [
+		{
+			"id": "history",
+			"label": "History",
+			"order": 0,
+			"items": [
+				{
+					"id": "chief_complaint",
+					"key": "chief_complaint",
+					"label": "Chief complaint",
+					"type": "text",
+					"required": true,
+					"order": 0,
+					"testId": "emr-builder-item-row-chief_complaint"
+				},
+				{
+					"id": "history_notes",
+					"key": "history_notes",
+					"label": "History notes",
+					"type": "textarea",
+					"order": 1,
+					"testId": "emr-builder-item-row-history_notes"
+				}
+			]
+		},
+		{
+			"id": "examination",
+			"label": "Examination",
+			"order": 1,
+			"items": [
+				{
+					"id": "visual_acuity",
+					"key": "visual_acuity",
+					"label": "Visual acuity",
+					"type": "measurement",
+					"order": 0,
+					"testId": "emr-builder-item-row-visual_acuity"
+				},
+				{
+					"id": "intraocular_pressure",
+					"key": "intraocular_pressure",
+					"label": "Intraocular pressure",
+					"type": "measurement",
+					"order": 1,
+					"testId": "emr-builder-item-row-intraocular_pressure"
+				}
+			]
+		}
+	]
+}

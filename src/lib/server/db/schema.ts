@@ -2,6 +2,7 @@ import { relations, sql } from 'drizzle-orm';
 import {
 	boolean,
 	check,
+	date,
 	index,
 	integer,
 	jsonb,
@@ -23,6 +24,14 @@ export const rangeStatus = pgEnum('barcode_range_status', [
 ]);
 export const printerType = pgEnum('printer_type', ['html_pdf', 'zpl', 'epl']);
 export const auditOutcome = pgEnum('audit_outcome', ['success', 'failure']);
+export const patientSex = pgEnum('patient_sex', ['female', 'male', 'other', 'unknown']);
+export const encounterStatus = pgEnum('encounter_status', ['active', 'completed', 'cancelled']);
+export const carePathwayStatus = pgEnum('care_pathway_status', [
+	'active',
+	'completed',
+	'cancelled'
+]);
+export const clinicalNoteStatus = pgEnum('clinical_note_status', ['draft', 'signed', 'amended']);
 
 export const masSettings = pgTable('mas_settings', {
 	key: text('key').primaryKey(),
@@ -194,6 +203,137 @@ export const barcodeRanges = pgTable(
 		check('barcode_ranges_serial_order_check', sql`${table.startSerial} <= ${table.endSerial}`),
 		check('barcode_ranges_start_check', sql`${table.startSerial} between 1 and 999999`),
 		check('barcode_ranges_end_check', sql`${table.endSerial} between 1 and 999999`)
+	]
+);
+
+export const patients = pgTable(
+	'patients',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		barcode: text('barcode').notNull(),
+		primaryPecId: integer('primary_pec_id').references(() => pecs.id, { onDelete: 'restrict' }),
+		fullName: text('full_name').notNull(),
+		sex: patientSex('sex').notNull().default('unknown'),
+		dateOfBirth: date('date_of_birth'),
+		ageYears: integer('age_years'),
+		phone: text('phone'),
+		address: text('address'),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('patients_barcode_uidx').on(table.barcode),
+		index('patients_primary_pec_idx').on(table.primaryPecId),
+		check('patients_barcode_not_blank_check', sql`length(trim(${table.barcode})) > 0`),
+		check('patients_full_name_not_blank_check', sql`length(trim(${table.fullName})) > 0`),
+		check(
+			'patients_age_years_check',
+			sql`${table.ageYears} is null or ${table.ageYears} between 0 and 130`
+		)
+	]
+);
+
+export const encounters = pgTable(
+	'encounters',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		patientId: uuid('patient_id')
+			.notNull()
+			.references(() => patients.id, { onDelete: 'restrict' }),
+		pecId: integer('pec_id')
+			.notNull()
+			.references(() => pecs.id, { onDelete: 'restrict' }),
+		carePathwayId: uuid('care_pathway_id'),
+		carePathwayType: text('care_pathway_type'),
+		barcodeSnapshot: text('barcode_snapshot').notNull(),
+		status: encounterStatus('status').notNull().default('active'),
+		occurredAt: timestamp('occurred_at').notNull().defaultNow(),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		index('encounters_patient_idx').on(table.patientId),
+		index('encounters_care_pathway_idx').on(table.carePathwayId),
+		index('encounters_pec_occurred_at_idx').on(table.pecId, table.occurredAt)
+	]
+);
+
+export const carePathways = pgTable(
+	'care_pathways',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		patientId: uuid('patient_id')
+			.notNull()
+			.references(() => patients.id, { onDelete: 'restrict' }),
+		encounterId: uuid('encounter_id')
+			.notNull()
+			.references(() => encounters.id, { onDelete: 'restrict' }),
+		pathwayType: text('pathway_type').notNull(),
+		parentCarePathwayId: uuid('parent_care_pathway_id'),
+		startedFromEncounterId: uuid('started_from_encounter_id').references(() => encounters.id, {
+			onDelete: 'set null'
+		}),
+		status: carePathwayStatus('status').notNull().default('active'),
+		context: jsonb('context_json').notNull().default({}),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		index('care_pathways_patient_idx').on(table.patientId),
+		index('care_pathways_encounter_idx').on(table.encounterId),
+		check('care_pathways_type_not_blank_check', sql`length(trim(${table.pathwayType})) > 0`)
+	]
+);
+
+export const clinicalNotes = pgTable(
+	'clinical_notes',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		patientId: uuid('patient_id')
+			.notNull()
+			.references(() => patients.id, { onDelete: 'restrict' }),
+		encounterId: uuid('encounter_id').references(() => encounters.id, { onDelete: 'set null' }),
+		carePathwayId: uuid('care_pathway_id').references(() => carePathways.id, {
+			onDelete: 'restrict'
+		}),
+		noteType: text('note_type').notNull(),
+		status: clinicalNoteStatus('status').notNull().default('signed'),
+		currentVersion: integer('current_version').notNull().default(1),
+		payloadHash: text('payload_hash').notNull(),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		index('clinical_notes_patient_idx').on(table.patientId),
+		index('clinical_notes_encounter_idx').on(table.encounterId),
+		index('clinical_notes_care_pathway_idx').on(table.carePathwayId),
+		check('clinical_notes_type_not_blank_check', sql`length(trim(${table.noteType})) > 0`),
+		check('clinical_notes_version_check', sql`${table.currentVersion} > 0`)
+	]
+);
+
+export const clinicalNoteVersions = pgTable(
+	'clinical_note_versions',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		noteId: uuid('note_id')
+			.notNull()
+			.references(() => clinicalNotes.id, { onDelete: 'cascade' }),
+		version: integer('version').notNull(),
+		changeType: text('change_type').notNull(),
+		payloadHash: text('payload_hash').notNull(),
+		reason: text('reason').notNull().default(''),
+		payload: jsonb('payload_json').notNull(),
+		submittedBy: text('submitted_by').references(() => user.id, { onDelete: 'set null' }),
+		submittedAt: timestamp('submitted_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('clinical_note_versions_note_version_uidx').on(table.noteId, table.version),
+		check('clinical_note_versions_version_check', sql`${table.version} > 0`)
 	]
 );
 

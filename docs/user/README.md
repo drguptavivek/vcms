@@ -2,7 +2,7 @@
 title: User Documentation Index
 status: active
 owner: operations
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-09
 ---
 
 # User Documentation
@@ -14,6 +14,8 @@ This directory contains operational guides for application users.
 - `../domains/identity-access/user-guide.md`: manage users, roles, and allocations.
 - `../domains/barcode/user-guide.md`: use the PEC printing dashboard to generate, reprint ranges, reprint one barcode, save Manual PEC Code Skips, and reset barcode sequences.
 - `../domains/printer-templates/user-guide.md`: configure browser/PDF, ZPL, and EPL label templates.
+- `../domains/emr-runtime/user-guide.md`: planned patient registration, barcode verification, encounter, immutable note, addendum, and care pathway workflows.
+- `../domains/emr-builder/user-guide.md`: planned clinical definition, validation, pathway branch, publish, and retire workflows.
 
 ## Local Development Access
 

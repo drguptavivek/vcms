@@ -2,7 +2,7 @@
 title: Documentation Index
 status: active
 owner: engineering
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-09
 ---
 
 # Documentation
@@ -27,6 +27,8 @@ Update documentation whenever implementation changes behavior, workflows, archit
 ## Domain Blueprints
 
 - `domains/barcode/`: PEC-centric print dashboard, barcode lifecycle, allocation, sequence reset, reprint, Manual PEC Code Skip, and direct printing.
+- `domains/emr-builder/`: dedicated Builder for versioned clinical sections, fields, validation rules, care pathway graphs, publication, and retirement.
+- `domains/emr-runtime/`: runtime-first EMR patient registration, barcode identity, encounters, immutable notes, addenda, and care pathway branching.
 - `domains/identity-access/`: users, authentication, roles, ReBAC, privilege registry, and PEC allocations.
 - `domains/master-data/`: teams and PEC master data.
 - `domains/observability-security/`: runtime logging, SQL errors, audit logs, rate limiting, and route security.
