@@ -37,6 +37,14 @@ export class EmrBuilderRepository {
 			.then((rows) => rows[0] as EmrNoteDefinitionRecord | undefined);
 	}
 
+	listDefinitions() {
+		return this.database
+			.select()
+			.from(emrNoteDefinitions)
+			.orderBy(desc(emrNoteDefinitions.updatedAt))
+			.then((rows) => rows as EmrNoteDefinitionRecord[]);
+	}
+
 	listActiveDefinitions() {
 		return this.database
 			.select()

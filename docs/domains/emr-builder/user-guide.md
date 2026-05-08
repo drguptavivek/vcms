@@ -9,19 +9,32 @@ last_reviewed: 2026-05-09
 
 ## Current Builder Workflow
 
-Builder administrators can open `/emr-builder` in the authenticated app shell. The current screen is an administrative JSON-first builder for the server definition model.
+Builder administrators can open EMR Builder from the authenticated app shell. `/emr-builder` opens the Forms landing page. The left navigation includes Forms plus direct edit shortcuts for OPD Register, Reported Patients, Cataract Surgery, and Cataract Follow-up.
 
 Current supported workflow:
 
-1. Enter a definition ID.
-2. Load the current draft or starter metadata.
-3. Edit the draft JSON.
-4. Apply JSON to refresh the preview.
-5. Review section/field order in the canvas.
-6. Select a section or field to inspect ODK/XLSForm metadata and SNOMED metadata.
-7. Move sections and fields with row buttons or keyboard arrow keys while focused.
-8. Save the draft.
-9. Publish when the draft is ready for runtime/mobile use.
+1. Open `/emr-builder` to review saved Builder definitions and XLSForm-derived fixture forms.
+2. Use Edit to open `/emr-builder/<definitionId>/edit`.
+3. For a saved definition, load the current draft or starter metadata.
+4. For a known PEC XLSForm fixture without a saved draft, load the fixture-derived definition.
+5. Add sections or fields from the palette, or select an existing section or field.
+6. Edit labels, column names, XLSForm names, required/read-only/hidden flags, logic expressions, validation, choices, SNOMED metadata, and localized labels/messages.
+7. Use Advanced JSON for low-level edits when the point-and-click controls do not cover a field.
+8. Review section/field order in the canvas and move sections or fields with accessible controls.
+9. Save the draft.
+10. Publish when the draft is ready for runtime/mobile use.
+
+## Forms Landing Page
+
+The Forms landing page lists saved Builder definitions and XLSForm-derived fixture forms. It shows form status, version, section and field counts, import notes, and runtime/mobile usage.
+
+Use Edit to open the direct edit route for a form. Use Preview to open the same editor with `?preview=1`.
+
+## Direct Edit Workflow
+
+Direct edit URLs load the saved draft when present. If no saved draft exists for a known PEC XLSForm fixture, the editor loads the fixture-derived definition and Save Draft persists it into Builder storage.
+
+Unknown definition IDs return not found.
 
 ## Administrator Expectations
 
@@ -43,7 +56,7 @@ Unsupported XLSForm semantics must remain visible in importer output or technica
 
 ## Current Limitations
 
-- The UI is JSON-first; it does not yet provide point-and-click field creation/editing.
-- Drag/drop is implemented as accessible reorder controls, not pointer drag/drop.
+- The editor supports point-and-click section and field editing for the current Builder model, with Advanced JSON available for low-level edits.
+- Drag/drop remains accessible reorder controls rather than pointer drag/drop.
 - Import from uploaded `.xlsx` XLSForm files is not yet a UI workflow; current importer coverage is fixture/data driven.
 - Retire, rollback, clone, and rich pathway graph editing are planned but not implemented.

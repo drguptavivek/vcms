@@ -231,6 +231,10 @@ export class EmrBuilderService {
 		};
 	}
 
+	listDefinitionsForBuilder() {
+		return this.repository.listDefinitions();
+	}
+
 	async getDraft(definitionId: string): Promise<EmrBuilderDraftResult> {
 		const definition = await this.repository.findDefinitionByDefinitionId(definitionId);
 		if (!definition) {

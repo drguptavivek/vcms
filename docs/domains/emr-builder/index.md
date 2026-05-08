@@ -19,7 +19,7 @@ The Builder does not own patient runtime records, encounters, signed notes, or r
 - `api.md`: planned Builder API areas and transport expectations.
 - `security.md`: Builder privileges, publication audit, and definition visibility.
 - `testing.md`: expected Builder unit, route, DB, component, and smoke coverage.
-- `user-guide.md`: Builder administrator workflow outline.
+- `user-guide.md`: Builder navigation, Forms landing page, direct edit URLs, draft save, preview, and publish workflow.
 
 ## Related Domains
 

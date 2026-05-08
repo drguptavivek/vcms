@@ -24,30 +24,56 @@
 		{ path: '/qz-integration', label: 'QZ Integration', icon: 'settings' }
 	] as const;
 
+	const emrBuilderLinks = [
+		{ path: '/emr-builder', label: 'Forms', icon: 'forms' },
+		{ path: '/emr-builder/pec-opd-register/edit', label: 'OPD Register', icon: 'edit' },
+		{
+			path: '/emr-builder/reported-patients-record/edit',
+			label: 'Reported Patients',
+			icon: 'edit'
+		},
+		{ path: '/emr-builder/cataract-surgery-record/edit', label: 'Cataract Surgery', icon: 'edit' },
+		{
+			path: '/emr-builder/cataract-followup-record/edit',
+			label: 'Cataract Follow-up',
+			icon: 'edit'
+		}
+	] as const;
+
 	const overviewLinks = [{ path: '/dashboard', label: 'Dashboard', icon: 'home' }] as const;
 
 	const pathname = $derived(page.url.pathname);
 	const section = $derived(
 		pathname.startsWith('/barcode') || pathname.startsWith('/printer-templates')
 			? 'barcodes'
-			: pathname.startsWith('/teams') ||
-				  pathname.startsWith('/pecs') ||
-				  pathname.startsWith('/users') ||
-				  pathname.startsWith('/qz-integration')
-				? 'admin'
-				: 'overview'
+			: pathname.startsWith('/emr-builder')
+				? 'emr-builder'
+				: pathname.startsWith('/teams') ||
+					  pathname.startsWith('/pecs') ||
+					  pathname.startsWith('/users') ||
+					  pathname.startsWith('/qz-integration')
+					? 'admin'
+					: 'overview'
 	);
 	const sectionTitle = $derived(
-		section === 'barcodes' ? 'Barcodes' : section === 'admin' ? 'Admin' : 'Overview'
+		section === 'barcodes'
+			? 'Barcodes'
+			: section === 'emr-builder'
+				? 'EMR Builder'
+				: section === 'admin'
+					? 'Admin'
+					: 'Overview'
 	);
 	const sectionLinks = $derived(
 		section === 'barcodes'
 			? data.isAdmin
 				? adminBarcodeLinks
 				: barcodeLinks
-			: section === 'admin'
-				? adminLinks
-				: overviewLinks
+			: section === 'emr-builder'
+				? emrBuilderLinks
+				: section === 'admin'
+					? adminLinks
+					: overviewLinks
 	);
 
 	function isActive(path: string) {
@@ -63,6 +89,10 @@
 	<a href={resolve('/barcode')} class:active={section === 'barcodes'}>
 		<Icon name="barcode" />
 		<span>Barcodes</span>
+	</a>
+	<a href={resolve('/emr-builder')} class:active={section === 'emr-builder'}>
+		<Icon name="forms" />
+		<span>EMR Builder</span>
 	</a>
 	<a href={resolve('/teams')} class:active={section === 'admin'}>
 		<Icon name="settings" />
