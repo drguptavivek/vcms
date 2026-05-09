@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { resolve } from '$app/paths';
+	import { base, resolve } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		moveFieldInDefinition,
 		moveSectionInDefinition,
@@ -65,15 +66,89 @@
 	const maxRecentDefinitions = 24;
 	const fieldPalette = [
 		{ type: 'text', label: 'Text', group: 'Survey' },
-		{ type: 'number', label: 'Number', group: 'Survey' },
+		{ type: 'integer', label: 'Integer', group: 'Survey' },
 		{ type: 'decimal', label: 'Decimal', group: 'Survey' },
+		{ type: 'range', label: 'Range', group: 'Survey' },
 		{ type: 'date', label: 'Date', group: 'Survey' },
 		{ type: 'single_choice', label: 'Select one', group: 'Choices' },
 		{ type: 'multi_choice', label: 'Select many', group: 'Choices' },
-		{ type: 'note', label: 'Note', group: 'Display' },
+		{ type: 'geopoint', label: 'GPS point', group: 'Location' },
+		{ type: 'geotrace', label: 'GPS line', group: 'Location' },
+		{ type: 'geoshape', label: 'GPS shape', group: 'Location' },
+		{ type: 'instructions', label: 'Note', group: 'Display' },
 		{ type: 'calculate', label: 'Calculate', group: 'Logic' },
 		{ type: 'barcode', label: 'Barcode', group: 'Clinical' },
 		{ type: 'image', label: 'Image', group: 'Clinical' }
+	] as const;
+	const sectionColorPalette = [
+		'#2563eb',
+		'#0f766e',
+		'#7c3aed',
+		'#be123c',
+		'#b45309',
+		'#047857',
+		'#0369a1',
+		'#a21caf'
+	] as const;
+	const dictionaryOptionSets = [
+		{
+			id: 'yes_no',
+			label: 'Yes / No',
+			choices: [
+				{ value: 'yes', label: 'Yes', disabled: false },
+				{ value: 'no', label: 'No', disabled: false }
+			]
+		},
+		{
+			id: 'sex',
+			label: 'Sex',
+			choices: [
+				{ value: 'male', label: 'Male', disabled: false },
+				{ value: 'female', label: 'Female', disabled: false },
+				{ value: 'other', label: 'Other', disabled: false }
+			]
+		},
+		{
+			id: 'eye',
+			label: 'Eye',
+			choices: [
+				{ value: 'right', label: 'Right eye', disabled: false },
+				{ value: 'left', label: 'Left eye', disabled: false },
+				{ value: 'both', label: 'Both eyes', disabled: false }
+			]
+		},
+		{
+			id: 'new_old',
+			label: 'New / Old',
+			choices: [
+				{ value: 'new', label: 'New', disabled: false },
+				{ value: 'old', label: 'Old', disabled: false }
+			]
+		}
+	] as const;
+	const dictionaryFields = [
+		{ id: 'opd_number', label: 'OPD Number', type: 'text', fieldName: 'opd', key: 'opd' },
+		{ id: 'patient_name', label: 'Patient Name', type: 'text', fieldName: 'patient_name' },
+		{ id: 'age_years', label: 'Age in years', type: 'integer', fieldName: 'age_years' },
+		{ id: 'phone_number', label: 'Phone Number', type: 'text', fieldName: 'phone_number' },
+		{
+			id: 'vision_centre',
+			label: 'Vision Centre',
+			type: 'single_choice',
+			fieldName: 'vision_centre'
+		}
+	] as const;
+	const dictionaryFragments = [
+		{
+			id: 'patient_identity',
+			label: 'Patient identity',
+			fields: ['opd_number', 'patient_name', 'age_years', 'phone_number']
+		},
+		{
+			id: 'visit_context',
+			label: 'Visit context',
+			fields: ['vision_centre']
+		}
 	] as const;
 
 	let definitionId = $state('');
@@ -291,7 +366,21 @@
 				ownerTeam: record.ownerTeam ?? undefined,
 				specialty: record.specialty ?? undefined
 			},
-			layout: { sections: [] },
+			layout: {
+				sections: [
+					{
+						id: 'section_1',
+						title: 'Section 1',
+						kind: 'section',
+						order: 0,
+						fields: [],
+						sections: [],
+						rules: [],
+						collapsible: false,
+						defaultCollapsed: false
+					}
+				]
+			},
 			rules: [],
 			actions: [],
 			analytics: { dimensions: [], measures: [], events: [] }
@@ -321,42 +410,8 @@
 		}
 
 		recordRecentDefinitionId(normalizedId);
-		isLoading = true;
-		try {
-			const response = await fetch(
-				`/api/v1/emr-builder/draft?definitionId=${encodeURIComponent(normalizedId)}`
-			);
-			const payload = await parseApiEnvelope<DraftResponse>(response);
-			selectedDefinition = payload.definition;
-			definitionId = payload.definition.definitionId;
-			selected = null;
-
-			if (payload.draft?.payloadJson) {
-				const normalized = toBuilderDefinition(payload.draft.payloadJson);
-				if (!normalized) {
-					parseError = 'Saved draft payload is invalid for this editor.';
-					workingDefinition = null;
-					workingDefinitionJson = '';
-					return;
-				}
-				workingDefinition = normalized;
-				workingDefinitionJson = JSON.stringify(workingDefinition, null, 2);
-				draftMessage = 'Loaded draft payload.';
-			} else {
-				workingDefinition = makeStarterDefinition(payload.definition);
-				workingDefinitionJson = JSON.stringify(workingDefinition, null, 2);
-				draftMessage = 'No draft found. Loaded starter definition from metadata.';
-			}
-
-			isLoaded = true;
-		} catch (error) {
-			parseError = error instanceof Error ? error.message : 'Failed to load EMR draft.';
-			selectedDefinition = null;
-			workingDefinition = null;
-			workingDefinitionJson = '';
-			isLoaded = false;
-		} finally {
-			isLoading = false;
+		if (browser) {
+			window.location.href = `${base}/emr-builder/${normalizedId}/edit`;
 		}
 	}
 
@@ -389,8 +444,22 @@
 		draftMessage = `Updated builder fields at ${new Date().toLocaleTimeString()}.`;
 	}
 
+	function updateMetadata(patch: Record<string, unknown>) {
+		if (!workingDefinition) return;
+		syncEditedDefinition({
+			...workingDefinition,
+			metadata: {
+				...((workingDefinition.metadata ?? {}) as Record<string, unknown>),
+				...patch
+			}
+		});
+	}
+
 	function normalizeFieldType(type: string) {
-		return type === 'note' ? 'text' : type === 'calculate' ? 'text' : type;
+		if (type === 'number') return 'integer';
+		if (type === 'note') return 'instructions';
+		if (type === 'barcode') return 'text';
+		return type;
 	}
 
 	function slugifyFieldName(value: string) {
@@ -404,7 +473,7 @@
 
 	function uniqueFieldId(base: string) {
 		if (!workingDefinition) return base;
-		const ids = new Set<string>();
+		const ids = new SvelteSet<string>();
 		const collect = (sections: EmrBuilderSection[]) => {
 			for (const section of sections) {
 				for (const field of section.fields) ids.add(field.id);
@@ -434,18 +503,44 @@
 			type: normalizeFieldType(type),
 			order,
 			required: false,
-			readOnly: type === 'note' || type === 'calculate',
-			readonly: type === 'note' || type === 'calculate',
+			readOnly: type === 'note' || type === 'instructions' || type === 'calculate',
+			readonly: type === 'note' || type === 'instructions' || type === 'calculate',
 			hidden: false,
 			width: 'full',
 			analytics: [],
+			fieldName: id,
+			input: {
+				barcodeInput: type === 'barcode' || undefined
+			},
+			logic: {
+				calculation: type === 'calculate' ? { value: '' } : undefined
+			},
 			odkBind: {
 				xlsformName: id,
-				calculation: type === 'calculate' ? { value: '' } : undefined
+				calculation: type === 'calculate' ? { value: '' } : undefined,
+				barcodeInput: type === 'barcode' || undefined
 			},
 			...(type === 'single_choice' || type === 'multi_choice'
 				? { choiceSet: { choices: [{ value: '1', label: 'Option 1', disabled: false }] } }
 				: {})
+		} as EmrBuilderField;
+	}
+
+	function makeDictionaryField(templateId: string, order: number): EmrBuilderField | null {
+		const template = dictionaryFields.find((item) => item.id === templateId);
+		if (!template) return null;
+		const id = uniqueFieldId(slugifyFieldName(template.fieldName));
+		return {
+			...makeField(template.type, order),
+			id,
+			key: 'key' in template ? template.key : id,
+			label: template.label,
+			type: normalizeFieldType(template.type),
+			fieldName: template.fieldName,
+			dictionaryRef: {
+				kind: 'field',
+				id: template.id
+			}
 		} as EmrBuilderField;
 	}
 
@@ -536,6 +631,85 @@
 		});
 	}
 
+	function addDictionaryField(sectionId: string, path: string[], templateId: string) {
+		if (!workingDefinition) return;
+		syncEditedDefinition({
+			...workingDefinition,
+			layout: {
+				...workingDefinition.layout,
+				sections: mapSections(workingDefinition.layout.sections, path, sectionId, (section) => {
+					const nextField = makeDictionaryField(templateId, section.fields.length);
+					if (!nextField) return section;
+					return {
+						...section,
+						fields: [...section.fields, nextField]
+					};
+				})
+			}
+		});
+	}
+
+	function addDictionaryFieldToSelection(templateId: string) {
+		if (!workingDefinition) return;
+		if (selected?.type === 'section' || selected?.type === 'field') {
+			addDictionaryField(selected.sectionId, selected.path, templateId);
+			return;
+		}
+		const firstSection = workingDefinition.layout.sections[0];
+		if (firstSection) addDictionaryField(firstSection.id, [], templateId);
+	}
+
+	function addDictionaryFragment(fragmentId: string) {
+		if (!workingDefinition) return;
+		const fragment = dictionaryFragments.find((item) => item.id === fragmentId);
+		if (!fragment) return;
+		const targetSection =
+			selected?.type === 'section' || selected?.type === 'field'
+				? { sectionId: selected.sectionId, path: selected.path }
+				: workingDefinition.layout.sections[0]
+					? { sectionId: workingDefinition.layout.sections[0].id, path: [] }
+					: null;
+		if (!targetSection) return;
+		syncEditedDefinition({
+			...workingDefinition,
+			layout: {
+				...workingDefinition.layout,
+				sections: mapSections(
+					workingDefinition.layout.sections,
+					targetSection.path,
+					targetSection.sectionId,
+					(section) => {
+						const fields = [...section.fields];
+						for (const templateId of fragment.fields) {
+							const nextField = makeDictionaryField(templateId, fields.length);
+							if (nextField) fields.push(nextField);
+						}
+						return {
+							...section,
+							fields
+						};
+					}
+				)
+			}
+		});
+	}
+
+	function applyDictionaryOptionSet(optionSetId: string) {
+		if (!selected || selected.type !== 'field') return;
+		const optionSet = dictionaryOptionSets.find((item) => item.id === optionSetId);
+		if (!optionSet) return;
+		updateField(selected, {
+			type: 'single_choice',
+			choiceSet: {
+				choices: optionSet.choices.map((choice) => ({ ...choice }))
+			},
+			dictionaryRef: {
+				kind: 'option_set',
+				id: optionSet.id
+			}
+		});
+	}
+
 	function addFieldFromPalette(type: string) {
 		if (!workingDefinition) return;
 		if (selected?.type === 'section') {
@@ -553,11 +727,14 @@
 	function addSection() {
 		if (!workingDefinition) return;
 		const id = `section_${workingDefinition.layout.sections.length + 1}`;
+		const color =
+			sectionColorPalette[workingDefinition.layout.sections.length % sectionColorPalette.length];
 		const nextSection = {
 			id,
 			title: `Section ${workingDefinition.layout.sections.length + 1}`,
 			kind: 'section',
 			order: workingDefinition.layout.sections.length,
+			color,
 			fields: [],
 			sections: [],
 			rules: [],
@@ -663,6 +840,31 @@
 		);
 	}
 
+	function deleteField(path: string[], sectionId: string, fieldId: string) {
+		if (!workingDefinition) return;
+		syncEditedDefinition({
+			...workingDefinition,
+			layout: {
+				...workingDefinition.layout,
+				sections: mapSections(workingDefinition.layout.sections, path, sectionId, (section) => ({
+					...section,
+					fields: section.fields
+						.filter((field) => field.id !== fieldId)
+						.map((field, index) => ({ ...field, order: index }))
+				}))
+			}
+		});
+		if (
+			selected?.type === 'field' &&
+			selected.sectionId === sectionId &&
+			selected.fieldId === fieldId &&
+			selected.path.length === path.length &&
+			selected.path.every((value, index) => value === path[index])
+		) {
+			selected = { type: 'section', path, sectionId };
+		}
+	}
+
 	async function saveDraft(event?: SubmitEvent) {
 		event?.preventDefault();
 		if (!workingDefinition) return;
@@ -740,10 +942,10 @@
 </div>
 
 <section class="card">
-	<h2>Definition</h2>
+	<h2>Form Setup</h2>
 	<form class="grid" onsubmit={loadDefinition}>
 		<label>
-			Definition ID
+			Form ID
 			<input
 				type="text"
 				list="recent-definitions"
@@ -754,7 +956,7 @@
 		</label>
 		<div class="definition-toolbar">
 			<button type="submit" disabled={!canLoadDefinition || isLoading}>
-				{isLoading ? 'Loading…' : 'Load Draft'}
+				{isLoading ? 'Opening…' : 'Open Form'}
 			</button>
 			<button
 				type="button"
@@ -806,6 +1008,42 @@
 		</p>
 		<p class="muted">Preview summary: {definitionSummary}</p>
 	{/if}
+	{#if workingDefinition}
+		<div class="metadata-grid">
+			<label>
+				Title
+				<input
+					value={normalizeString((workingDefinition.metadata as Record<string, unknown>).title, '')}
+					oninput={(event) =>
+						updateMetadata({ title: (event.currentTarget as HTMLInputElement).value })}
+				/>
+			</label>
+			<label>
+				Form type
+				<input
+					value={normalizeString(
+						(workingDefinition.metadata as Record<string, unknown>).noteType,
+						''
+					)}
+					oninput={(event) =>
+						updateMetadata({ noteType: (event.currentTarget as HTMLInputElement).value })}
+				/>
+			</label>
+			<label>
+				Specialty
+				<input
+					value={normalizeString(
+						(workingDefinition.metadata as Record<string, unknown>).specialty,
+						''
+					)}
+					oninput={(event) =>
+						updateMetadata({
+							specialty: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+		</div>
+	{/if}
 	<div class="language-row">
 		<label>
 			Language
@@ -849,7 +1087,7 @@
 				<h2>Fields</h2>
 				<button type="button" onclick={addSection}>Add Section</button>
 			</div>
-			<p class="muted">Add XLSForm-style fields to the selected section.</p>
+			<p class="muted">Add fields to the selected section.</p>
 			<div class="palette-grid">
 				{#each fieldPalette as item (item.type)}
 					<button type="button" onclick={() => addFieldFromPalette(item.type)}>
@@ -858,6 +1096,41 @@
 					</button>
 				{/each}
 			</div>
+
+			<details class="dictionary-panel" open>
+				<summary>Data Dictionary</summary>
+				<div class="dictionary-group">
+					<h3>Fields</h3>
+					{#each dictionaryFields as item (item.id)}
+						<button type="button" onclick={() => addDictionaryFieldToSelection(item.id)}>
+							<span>{item.label}</span>
+							<small>{item.fieldName}</small>
+						</button>
+					{/each}
+				</div>
+				<div class="dictionary-group">
+					<h3>Fragments</h3>
+					{#each dictionaryFragments as item (item.id)}
+						<button type="button" onclick={() => addDictionaryFragment(item.id)}>
+							<span>{item.label}</span>
+							<small>{item.fields.length} fields</small>
+						</button>
+					{/each}
+				</div>
+				<div class="dictionary-group">
+					<h3>Option Sets</h3>
+					{#each dictionaryOptionSets as item (item.id)}
+						<button
+							type="button"
+							disabled={selected?.type !== 'field'}
+							onclick={() => applyDictionaryOptionSet(item.id)}
+						>
+							<span>{item.label}</span>
+							<small>{item.choices.length} options</small>
+						</button>
+					{/each}
+				</div>
+			</details>
 		</aside>
 
 		<div class="builder-center">
@@ -867,6 +1140,7 @@
 				onSelectSection={(selection) => (selected = selection)}
 				onMoveSection={moveSection}
 				onMoveField={moveField}
+				onDeleteField={deleteField}
 			/>
 
 			<details class="card json-panel">
@@ -962,6 +1236,20 @@
 		padding-top: 0.9rem;
 		border-top: 1px solid var(--color-border);
 	}
+	.metadata-grid {
+		display: grid;
+		grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 0.6fr) minmax(10rem, 0.6fr);
+		gap: 0.7rem;
+		margin-top: 0.9rem;
+		padding-top: 0.9rem;
+		border-top: 1px solid var(--color-border);
+	}
+	.metadata-grid label {
+		display: grid;
+		gap: 0.3rem;
+		font-weight: 700;
+		color: var(--color-rpc-navy);
+	}
 	.builder-shell {
 		display: grid;
 		grid-template-columns: minmax(12rem, 16rem) minmax(24rem, 1fr) minmax(22rem, 28rem);
@@ -976,21 +1264,72 @@
 	}
 	.palette-grid {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem;
+		grid-template-columns: 1fr;
+		gap: 0.35rem;
 	}
 	.palette-grid button {
-		display: grid;
-		justify-items: start;
-		gap: 0.15rem;
-		min-height: 3.4rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 2.35rem;
+		padding: 0.45rem 0.55rem;
 		background: var(--color-surface-card);
 		color: var(--color-rpc-navy);
 		border-color: var(--color-border-strong);
+		text-align: left;
+	}
+	.palette-grid span {
+		line-height: 1.1;
 	}
 	.palette-grid small {
 		color: var(--color-text-muted);
 		font-weight: 700;
+		font-size: 0.72rem;
+		white-space: nowrap;
+	}
+	.dictionary-panel {
+		margin-top: 1rem;
+		padding-top: 0.85rem;
+		border-top: 1px solid var(--color-border);
+	}
+	.dictionary-panel summary {
+		cursor: pointer;
+		font-weight: 800;
+		color: var(--color-rpc-navy);
+	}
+	.dictionary-group {
+		display: grid;
+		gap: 0.35rem;
+		margin-top: 0.75rem;
+	}
+	.dictionary-group h3 {
+		margin: 0;
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+		letter-spacing: 0;
+	}
+	.dictionary-group button {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 2.2rem;
+		padding: 0.4rem 0.55rem;
+		border-color: var(--color-border-strong);
+		background: var(--color-surface-card);
+		color: var(--color-rpc-navy);
+		text-align: left;
+	}
+	.dictionary-group button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.dictionary-group small {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		white-space: nowrap;
 	}
 	.builder-center {
 		display: grid;
@@ -1050,7 +1389,8 @@
 		}
 	}
 	@media (max-width: 720px) {
-		.language-row {
+		.language-row,
+		.metadata-grid {
 			grid-template-columns: 1fr;
 		}
 	}

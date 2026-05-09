@@ -83,15 +83,22 @@ export const emrFieldTypeSchema = z.enum([
 	'textarea',
 	'integer',
 	'decimal',
+	'range',
 	'date',
 	'datetime',
 	'boolean',
 	'single_choice',
 	'multi_choice',
+	'geopoint',
+	'geotrace',
+	'geoshape',
 	'measurement',
 	'diagnosis',
 	'medication',
+	'calculate',
 	'instructions',
+	'image',
+	'audit',
 	'file_reference'
 ]);
 export const emrSectionKindSchema = z.enum(['section', 'group', 'table', 'repeatable_group']);
@@ -133,6 +140,9 @@ export const emrDefinitionMetadataSchema = z
 		status: emrDefinitionStatusSchema.default('draft'),
 		version: z.number().int().positive(),
 		locale: z.string().trim().min(2).max(20).default('en-IN'),
+		defaultLanguage: z.string().trim().min(2).max(80).optional(),
+		languages: z.array(z.string().trim().min(2).max(80)).max(30).default([]),
+		formStyle: z.string().trim().min(1).max(120).optional(),
 		tags: z.array(identifierSchema).max(30).default([]),
 		ownerTeam: identifierSchema.optional(),
 		effectiveFrom: isoDateTimeSchema.optional(),
@@ -153,6 +163,7 @@ export const emrChoiceSchema = z
 	.object({
 		value: z.string().trim().min(1).max(120),
 		label: labelSchema,
+		localizedLabel: z.record(z.string(), labelSchema).optional(),
 		codeSystem: identifierSchema.optional(),
 		code: z.string().trim().min(1).max(120).optional(),
 		analyticsValue: z.string().trim().min(1).max(120).optional(),
@@ -188,6 +199,8 @@ export const emrFieldValidationSchema = z
 		min: z.number().optional(),
 		max: z.number().optional(),
 		pattern: z.string().trim().min(1).max(500).optional(),
+		inputMask: z.string().trim().min(1).max(200).optional(),
+		textTransform: z.enum(['uppercase', 'lowercase', 'titlecase']).optional(),
 		precision: z.number().int().min(0).max(6).optional(),
 		requiredMessage: z.string().trim().min(1).max(300).optional()
 	})
@@ -206,6 +219,33 @@ export const emrFieldValidationSchema = z
 		path: ['max']
 	});
 
+export const emrFieldLogicSchema = z.object({
+	required: emrExpressionSchema.optional(),
+	relevance: emrExpressionSchema.optional(),
+	calculation: emrExpressionSchema.optional(),
+	trigger: z.string().trim().min(1).max(500).optional(),
+	constraint: emrExpressionSchema.optional(),
+	constraintMessage: z.string().trim().min(1).max(500).optional(),
+	choiceFilter: z.string().trim().min(1).max(500).optional(),
+	randomizeChoices: z.boolean().optional(),
+	randomizeSeed: z.string().trim().min(1).max(200).optional()
+});
+
+export const emrFieldInputSchema = z.object({
+	barcodeInput: z.boolean().optional(),
+	mask: z.string().trim().min(1).max(200).optional(),
+	textTransform: z.enum(['uppercase', 'lowercase', 'titlecase']).optional(),
+	rangeStart: z.number().optional(),
+	rangeEnd: z.number().optional(),
+	rangeStep: z.number().positive().optional(),
+	captureAccuracy: z.number().positive().max(1000).optional(),
+	warningAccuracy: z.number().positive().max(1000).optional(),
+	maxPixels: z.number().int().positive().max(100000).optional(),
+	locationPriority: z.enum(['high-accuracy', 'balanced', 'low-power', 'no-power']).optional(),
+	locationMinInterval: z.number().int().positive().optional(),
+	locationMaxAge: z.number().int().positive().optional()
+});
+
 export const emrAnalyticsHintSchema = z.object({
 	key: identifierSchema,
 	label: labelSchema.optional(),
@@ -222,9 +262,24 @@ export const emrOdkBindSchema = z.object({
 	constraint: emrExpressionSchema.optional(),
 	constraintMessage: z.string().trim().min(1).max(500).optional(),
 	calculation: emrExpressionSchema.optional(),
+	trigger: z.string().trim().min(1).max(500).optional(),
 	readOnly: emrExpressionSchema.optional(),
 	appearance: z.string().trim().min(1).max(200).optional(),
-	choiceSource: z.string().trim().min(1).max(200).optional()
+	choiceSource: z.string().trim().min(1).max(200).optional(),
+	choiceFilter: z.string().trim().min(1).max(500).optional(),
+	parameters: z.string().trim().min(1).max(500).optional(),
+	captureAccuracy: z.number().positive().max(1000).optional(),
+	warningAccuracy: z.number().positive().max(1000).optional(),
+	rangeStart: z.number().optional(),
+	rangeEnd: z.number().optional(),
+	rangeStep: z.number().positive().optional(),
+	maxPixels: z.number().int().positive().max(100000).optional(),
+	locationPriority: z.enum(['high-accuracy', 'balanced', 'low-power', 'no-power']).optional(),
+	locationMinInterval: z.number().int().positive().optional(),
+	locationMaxAge: z.number().int().positive().optional(),
+	randomizeChoices: z.boolean().optional(),
+	randomizeSeed: z.string().trim().min(1).max(200).optional(),
+	barcodeInput: z.boolean().optional()
 });
 
 export const emrFieldSchema = z
@@ -232,14 +287,34 @@ export const emrFieldSchema = z
 		id: identifierSchema,
 		key: identifierSchema,
 		label: labelSchema,
+		localizedLabel: z.record(z.string(), labelSchema).optional(),
 		type: emrFieldTypeSchema,
+		fieldName: z.string().trim().min(1).max(120).optional(),
 		xlsv1Name: z.string().trim().min(1).max(120).optional(),
 		helpText: z.string().trim().min(1).max(500).optional(),
+		localizedHint: z.record(z.string(), z.string().trim().min(1).max(500)).optional(),
+		guidanceHint: z.string().trim().min(1).max(1000).optional(),
+		localizedGuidanceHint: z.record(z.string(), z.string().trim().min(1).max(1000)).optional(),
+		media: z
+			.object({
+				image: z.string().trim().min(1).max(300).optional(),
+				video: z.string().trim().min(1).max(300).optional(),
+				audio: z.string().trim().min(1).max(300).optional(),
+				localizedImage: z.record(z.string(), z.string().trim().min(1).max(300)).optional(),
+				localizedVideo: z.record(z.string(), z.string().trim().min(1).max(300)).optional(),
+				localizedAudio: z.record(z.string(), z.string().trim().min(1).max(300)).optional()
+			})
+			.optional(),
 		placeholder: z.string().trim().min(1).max(200).optional(),
 		unit: z.string().trim().min(1).max(40).optional(),
 		defaultValue: expressionValueSchema.or(emrExpressionSchema).optional(),
+		localizedRequiredMessage: z.record(z.string(), z.string().trim().min(1).max(300)).optional(),
+		localizedConstraintMessage: z.record(z.string(), z.string().trim().min(1).max(500)).optional(),
 		choiceSet: emrChoiceSetSchema.optional(),
 		validation: emrFieldValidationSchema.optional(),
+		logic: emrFieldLogicSchema.optional(),
+		input: emrFieldInputSchema.optional(),
+		appearance: z.string().trim().min(1).max(200).optional(),
 		odkBind: emrOdkBindSchema.optional(),
 		analytics: z.array(emrAnalyticsHintSchema).max(20).default([]),
 		snomed: emrSnomedMetadataSchema.optional(),
@@ -329,6 +404,7 @@ export const emrLayoutSectionSchema: z.ZodType<{
 		xlsformName?: string;
 		appearance?: string;
 		displayNote?: string;
+		relevant?: string;
 		repeat?: {
 			count?: EmrExpression;
 			min?: number;
@@ -353,6 +429,7 @@ export const emrLayoutSectionSchema: z.ZodType<{
 					xlsformName: z.string().trim().min(1).max(120).optional(),
 					appearance: z.string().trim().min(1).max(200).optional(),
 					displayNote: z.string().trim().min(1).max(1000).optional(),
+					relevant: z.string().trim().min(1).max(500).optional(),
 					repeat: z
 						.object({
 							count: emrExpressionSchema.optional(),

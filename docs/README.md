@@ -27,7 +27,7 @@ Update documentation whenever implementation changes behavior, workflows, archit
 ## Domain Blueprints
 
 - `domains/barcode/`: PEC-centric print dashboard, barcode lifecycle, allocation, sequence reset, reprint, Manual PEC Code Skip, and direct printing.
-- `domains/emr-builder/`: Forms landing page, direct edit workflow for PEC XLSForm-derived forms, versioned clinical definitions, validation rules, publication, and retirement planning.
+- `domains/emr-builder/`: Forms landing page, direct edit workflow for PEC imported forms, versioned clinical definitions, validation rules, publication, and retirement planning.
 - `domains/emr-runtime/`: runtime-first EMR patient registration, barcode identity, encounters, immutable notes, addenda, care pathway branching, and offline staff mobile collection planning.
 - `domains/identity-access/`: users, authentication, roles, ReBAC, privilege registry, and PEC allocations.
 - `domains/master-data/`: teams and PEC master data.

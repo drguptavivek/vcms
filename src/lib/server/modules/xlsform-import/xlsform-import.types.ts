@@ -20,8 +20,11 @@ export type XlsformFieldRow = {
 	name?: string;
 	label?: string;
 	hint?: string;
+	guidance_hint?: string;
 	required?: string;
+	required_message?: string;
 	choice_filter?: string;
+	repeat_count?: string;
 	relevant?: string;
 	constraint?: string;
 	constraint_message?: string;
@@ -31,8 +34,13 @@ export type XlsformFieldRow = {
 	appearance?: string;
 	default?: string;
 	readonly?: string;
+	read_only?: string;
 	save_to?: string;
 	not_a_choice?: string;
+	image?: string;
+	video?: string;
+	audio?: string;
+	[key: string]: string | undefined;
 };
 
 export type XlsformChoiceRow = {
@@ -53,6 +61,8 @@ export type XlsformSettings = {
 	form_id?: string;
 	version?: string;
 	instance_name?: string;
+	default_language?: string;
+	style?: string;
 };
 
 export type XlsformFixture = {

@@ -15,7 +15,7 @@ This directory contains operational guides for application users.
 - `../domains/barcode/user-guide.md`: use the PEC printing dashboard to generate, reprint ranges, reprint one barcode, save Manual PEC Code Skips, and reset barcode sequences.
 - `../domains/printer-templates/user-guide.md`: configure browser/PDF, ZPL, and EPL label templates.
 - `../domains/emr-runtime/user-guide.md`: planned patient registration, barcode verification, encounter, immutable note, addendum, and care pathway workflows.
-- `../domains/emr-builder/user-guide.md`: use the EMR Builder Forms landing page, open direct edit shortcuts for PEC forms, review XLSForm-derived structures, save drafts, preview, and publish definitions.
+- `../domains/emr-builder/user-guide.md`: use the EMR Builder Forms landing page, open direct edit shortcuts for PEC forms, review imported structures, save drafts, preview, and publish definitions.
 
 ## Local Development Access
 

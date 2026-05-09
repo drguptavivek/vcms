@@ -40,16 +40,19 @@
 
 	const fieldTypes = [
 		'text',
-		'number',
+		'integer',
 		'decimal',
+		'range',
 		'date',
 		'time',
 		'datetime',
 		'single_choice',
 		'multi_choice',
+		'geopoint',
+		'geotrace',
+		'geoshape',
 		'boolean',
-		'note',
-		'barcode',
+		'instructions',
 		'image',
 		'calculate'
 	] as const;
@@ -109,6 +112,16 @@
 		updateField({ odkBind: { ...(field.odkBind as object | undefined), ...patch } });
 	}
 
+	function updateFieldLogic(patch: Record<string, unknown>) {
+		if (!field) return;
+		updateField({ logic: { ...(field.logic as object | undefined), ...patch } });
+	}
+
+	function updateFieldInput(patch: Record<string, unknown>) {
+		if (!field) return;
+		updateField({ input: { ...(field.input as object | undefined), ...patch } });
+	}
+
 	function updateSnomed(patch: Record<string, unknown>) {
 		if (!field) return;
 		updateField({ snomed: { ...(field.snomed as object | undefined), ...patch } });
@@ -136,17 +149,82 @@
 	function sectionTitle(value: EmrBuilderSection) {
 		return typeof value.title === 'string' ? value.title : value.id;
 	}
+
+	const propertyHelp: Record<string, string> = {
+		'Section title': 'Name shown for this section in the form builder and clinical form.',
+		'Section kind': 'Choose a normal section, grouped questions, or a repeatable block.',
+		'Section relevance': 'Condition that controls whether this section is shown.',
+		'Section appearance': 'Display style for this section.',
+		'Section color': 'Accent color used to visually distinguish this section in the builder.',
+		'Repeat count': 'Fixed number or expression that controls how many repeats are created.',
+		Collapsible: 'Allow users to collapse or expand this section.',
+		'Default collapsed': 'Start this section collapsed when the form opens.',
+		Label: 'Text shown to the user for this field.',
+		Hint: 'Localized help text shown with this field.',
+		'Column name': 'Storage/export column key for this field.',
+		'Field name': 'Variable name used in expressions and form logic.',
+		Type: 'Answer/input type for this field.',
+		Width: 'How much horizontal space this field should occupy.',
+		'Help text': 'Short hint shown with the field during data entry.',
+		'Guidance hint': 'Training or print guidance that is not normally shown during entry.',
+		Required: 'Always require a response before completing the form.',
+		'Read-only / note':
+			'Show the value without allowing edits, or treat the field as display-only.',
+		Hidden: 'Store this field without showing it in the form UI.',
+		'Barcode input': 'Allow a barcode scanner to populate this text field.',
+		'Required expression': 'Condition that makes the field required only when true.',
+		Relevance: 'Condition that controls whether this field is shown.',
+		Calculate: 'Expression used to calculate this field value.',
+		Trigger: 'Field change that causes a calculation to run.',
+		Constraint: 'Validation expression that the response must satisfy.',
+		'Constraint message': 'Message shown when the constraint fails.',
+		Appearance: 'Display style or widget hint for this field.',
+		'Choice filter': 'Expression that filters available options based on earlier answers.',
+		'Randomize choices': 'Show options in random order.',
+		'Randomization seed': 'Expression used to keep randomized options reproducible.',
+		'Capture accuracy': 'Target GPS accuracy before automatically accepting a point.',
+		'Warning accuracy': 'GPS accuracy threshold that should warn the user.',
+		'Range start': 'First value in the range control.',
+		'Range end': 'Last value in the range control.',
+		'Range step': 'Increment between range values.',
+		'Max pixels': 'Largest image side after automatic resize.',
+		'Min length': 'Minimum number of characters allowed.',
+		'Max length': 'Maximum number of characters allowed.',
+		Min: 'Minimum numeric value allowed.',
+		Max: 'Maximum numeric value allowed.',
+		Pattern: 'Regular expression pattern the response must match.',
+		'Entry mask':
+			'Input mask such as ##-##-###### where # is number, $ is letter, X is any character.',
+		'Text case': 'Automatically transform text as it is entered.',
+		'Required message': 'Message shown when a required answer is missing.',
+		Value: 'Stored value for this option.',
+		'SNOMED CT code': 'Clinical code attached to this option or field.',
+		'Concept ID': 'SNOMED CT concept identifier for this field.',
+		'Preferred term': 'Human-readable clinical term for the selected concept.'
+	};
+
+	function help(property: string) {
+		return propertyHelp[property] ?? `${property} setting.`;
+	}
 </script>
 
-<section class="card">
+{#snippet labelText(text: string)}
+	<span class="label-head">
+		<span>{text}</span>
+		<span class="help-dot" data-tip={help(text)} aria-label={help(text)}>i</span>
+	</span>
+{/snippet}
+
+<section class="card inspector-panel">
 	<h2>Properties</h2>
 	{#if !selection}
-		<p class="muted">Select a section or field to edit its XLSForm and terminology mapping.</p>
+		<p class="muted">Select a section or field to edit its field mapping and terminology.</p>
 	{:else if selection.type === 'section'}
 		{#if section}
+			<h3>Section Setup</h3>
 			<div class="property-grid">
 				<label>
-					Section title
+					{@render labelText('Section title')}
 					<input
 						value={sectionTitle(section)}
 						oninput={(event) =>
@@ -154,7 +232,7 @@
 					/>
 				</label>
 				<label>
-					Section kind
+					{@render labelText('Section kind')}
 					<select
 						value={asString(section.kind) || 'section'}
 						onchange={(event) =>
@@ -162,10 +240,70 @@
 					>
 						<option value="section">Section</option>
 						<option value="group">Group</option>
-						<option value="repeat">Repeat</option>
+						<option value="repeatable_group">Repeat</option>
 					</select>
 				</label>
+				<label>
+					{@render labelText('Section relevance')}
+					<input
+						value={asString((section.odk as { relevant?: unknown } | undefined)?.relevant)}
+						oninput={(event) =>
+							updateSection({
+								odk: {
+									...(section.odk as object | undefined),
+									relevant: (event.currentTarget as HTMLInputElement).value || undefined
+								}
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Section appearance')}
+					<input
+						value={asString((section.odk as { appearance?: unknown } | undefined)?.appearance)}
+						oninput={(event) =>
+							updateSection({
+								odk: {
+									...(section.odk as object | undefined),
+									appearance: (event.currentTarget as HTMLInputElement).value || undefined
+								}
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Section color')}
+					<input
+						type="color"
+						value={asString(section.color) || '#2563eb'}
+						oninput={(event) =>
+							updateSection({
+								color: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				{#if section.kind === 'repeatable_group'}
+					<label>
+						{@render labelText('Repeat count')}
+						<input
+							value={asString(
+								(section.odk as { repeat?: { count?: unknown } } | undefined)?.repeat?.count
+							)}
+							oninput={(event) =>
+								updateSection({
+									odk: {
+										...(section.odk as object | undefined),
+										repeat: {
+											...((section.odk as { repeat?: object } | undefined)?.repeat ?? {}),
+											count: (event.currentTarget as HTMLInputElement).value
+												? { value: (event.currentTarget as HTMLInputElement).value }
+												: undefined
+										}
+									}
+								})}
+						/>
+					</label>
+				{/if}
 			</div>
+			<h3>Section Behavior</h3>
 			<div class="check-row">
 				<label>
 					<input
@@ -193,15 +331,18 @@
 					>Add Field</button
 				>
 			</div>
-			<h3>Section JSON</h3>
-			<pre>{sectionJson}</pre>
+			<details class="advanced-group">
+				<summary>Advanced JSON</summary>
+				<pre>{sectionJson}</pre>
+			</details>
 		{:else}
 			<p class="error">The selected section could not be resolved from the current draft.</p>
 		{/if}
 	{:else if field}
+		<h3>Field Setup</h3>
 		<div class="property-grid">
 			<label>
-				Label
+				{@render labelText('Label')}
 				<input
 					value={asString(field.label)}
 					oninput={(event) =>
@@ -209,22 +350,25 @@
 				/>
 			</label>
 			<label>
-				Column name
+				{@render labelText('Column name')}
 				<input
 					value={asString(field.key)}
 					oninput={(event) => updateField({ key: (event.currentTarget as HTMLInputElement).value })}
 				/>
 			</label>
 			<label>
-				XLSForm name
+				{@render labelText('Field name')}
 				<input
-					value={asString((field.odkBind as { xlsformName?: unknown } | undefined)?.xlsformName)}
+					value={asString(field.fieldName) ||
+						asString((field.odkBind as { xlsformName?: unknown } | undefined)?.xlsformName)}
 					oninput={(event) =>
-						updateOdkBind({ xlsformName: (event.currentTarget as HTMLInputElement).value })}
+						updateField({
+							fieldName: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
 				/>
 			</label>
 			<label>
-				Type
+				{@render labelText('Type')}
 				<select
 					value={asString(field.type)}
 					onchange={(event) =>
@@ -236,7 +380,7 @@
 				</select>
 			</label>
 			<label>
-				Width
+				{@render labelText('Width')}
 				<select
 					value={asString(field.width) || 'full'}
 					onchange={(event) =>
@@ -248,20 +392,30 @@
 				</select>
 			</label>
 			<label>
-				Help text
+				{@render labelText('Help text')}
 				<input
 					value={asString(field.helpText)}
 					oninput={(event) =>
 						updateField({ helpText: (event.currentTarget as HTMLInputElement).value || undefined })}
 				/>
 			</label>
+			<label>
+				{@render labelText('Guidance hint')}
+				<input
+					value={asString(field.guidanceHint)}
+					oninput={(event) =>
+						updateField({
+							guidanceHint: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
 		</div>
 
 		{#if languages.length > 1}
-			<h3>Language: {activeLanguage}</h3>
+			<h3>Translations: {activeLanguage}</h3>
 			<div class="property-grid">
 				<label>
-					Label
+					{@render labelText('Label')}
 					<input
 						value={localizedValue(field.localizedLabel, activeLanguage)}
 						oninput={(event) =>
@@ -275,7 +429,7 @@
 					/>
 				</label>
 				<label>
-					Hint
+					{@render labelText('Hint')}
 					<input
 						value={localizedValue(field.localizedHint, activeLanguage)}
 						oninput={(event) =>
@@ -289,7 +443,7 @@
 					/>
 				</label>
 				<label>
-					Required message
+					{@render labelText('Required message')}
 					<input
 						value={localizedValue(field.localizedRequiredMessage, activeLanguage)}
 						oninput={(event) =>
@@ -303,7 +457,7 @@
 					/>
 				</label>
 				<label>
-					Constraint message
+					{@render labelText('Constraint message')}
 					<input
 						value={localizedValue(field.localizedConstraintMessage, activeLanguage)}
 						oninput={(event) =>
@@ -319,6 +473,7 @@
 			</div>
 		{/if}
 
+		<h3>State And Input</h3>
 		<div class="check-row">
 			<label>
 				<input
@@ -350,78 +505,292 @@
 				/>
 				Hidden
 			</label>
+			{#if field.type === 'text' || field.type === 'textarea'}
+				<label>
+					<input
+						type="checkbox"
+						checked={Boolean(
+							(field.input as { barcodeInput?: unknown } | undefined)?.barcodeInput ??
+							(field.odkBind as { barcodeInput?: unknown } | undefined)?.barcodeInput
+						)}
+						onchange={(event) =>
+							updateFieldInput({
+								barcodeInput: (event.currentTarget as HTMLInputElement).checked
+							})}
+					/>
+					Barcode input
+				</label>
+			{/if}
 		</div>
 
-		<h3>XLSForm Logic</h3>
+		<h3>Logic</h3>
 		<div class="property-grid">
 			<label>
-				Required expression
+				{@render labelText('Required expression')}
 				<input
 					value={asString((field.odkBind as { required?: unknown } | undefined)?.required)}
 					oninput={(event) =>
-						updateOdkBind({
+						updateFieldLogic({
 							required: textExpression((event.currentTarget as HTMLInputElement).value)
 						})}
 				/>
 			</label>
 			<label>
-				Relevance
+				{@render labelText('Required message')}
 				<input
-					value={asString((field.odkBind as { relevant?: unknown } | undefined)?.relevant)}
+					value={asString(
+						(field.validation as { requiredMessage?: unknown } | undefined)?.requiredMessage
+					)}
 					oninput={(event) =>
-						updateOdkBind({
-							relevant: textExpression((event.currentTarget as HTMLInputElement).value)
+						updateFieldValidation({
+							requiredMessage: (event.currentTarget as HTMLInputElement).value || undefined
 						})}
 				/>
 			</label>
 			<label>
-				Calculate
+				{@render labelText('Relevance')}
 				<input
-					value={asString((field.odkBind as { calculation?: unknown } | undefined)?.calculation)}
+					value={asString((field.logic as { relevance?: unknown } | undefined)?.relevance) ||
+						asString((field.odkBind as { relevant?: unknown } | undefined)?.relevant)}
 					oninput={(event) =>
-						updateOdkBind({
+						updateFieldLogic({
+							relevance: textExpression((event.currentTarget as HTMLInputElement).value)
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Calculate')}
+				<input
+					value={asString((field.logic as { calculation?: unknown } | undefined)?.calculation) ||
+						asString((field.odkBind as { calculation?: unknown } | undefined)?.calculation)}
+					oninput={(event) =>
+						updateFieldLogic({
 							calculation: textExpression((event.currentTarget as HTMLInputElement).value)
 						})}
 				/>
 			</label>
 			<label>
-				Constraint
+				{@render labelText('Trigger')}
 				<input
-					value={asString((field.odkBind as { constraint?: unknown } | undefined)?.constraint)}
+					value={asString((field.logic as { trigger?: unknown } | undefined)?.trigger) ||
+						asString((field.odkBind as { trigger?: unknown } | undefined)?.trigger)}
 					oninput={(event) =>
-						updateOdkBind({
+						updateFieldLogic({
+							trigger: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Constraint')}
+				<input
+					value={asString((field.logic as { constraint?: unknown } | undefined)?.constraint) ||
+						asString((field.odkBind as { constraint?: unknown } | undefined)?.constraint)}
+					oninput={(event) =>
+						updateFieldLogic({
 							constraint: textExpression((event.currentTarget as HTMLInputElement).value)
 						})}
 				/>
 			</label>
 			<label>
-				Constraint message
+				{@render labelText('Constraint message')}
 				<input
 					value={asString(
-						(field.odkBind as { constraintMessage?: unknown } | undefined)?.constraintMessage
-					)}
+						(field.logic as { constraintMessage?: unknown } | undefined)?.constraintMessage
+					) ||
+						asString(
+							(field.odkBind as { constraintMessage?: unknown } | undefined)?.constraintMessage
+						)}
 					oninput={(event) =>
-						updateOdkBind({
+						updateFieldLogic({
 							constraintMessage: (event.currentTarget as HTMLInputElement).value || undefined
 						})}
 				/>
 			</label>
 			<label>
-				Appearance
+				{@render labelText('Appearance')}
 				<input
-					value={asString((field.odkBind as { appearance?: unknown } | undefined)?.appearance)}
+					value={asString(field.appearance) ||
+						asString((field.odkBind as { appearance?: unknown } | undefined)?.appearance)}
 					oninput={(event) =>
-						updateOdkBind({
+						updateField({
 							appearance: (event.currentTarget as HTMLInputElement).value || undefined
 						})}
 				/>
 			</label>
+			{#if field.type === 'single_choice' || field.type === 'multi_choice'}
+				<label>
+					{@render labelText('Choice filter')}
+					<input
+						value={asString(
+							(field.logic as { choiceFilter?: unknown } | undefined)?.choiceFilter
+						) || asString((field.odkBind as { choiceFilter?: unknown } | undefined)?.choiceFilter)}
+						oninput={(event) =>
+							updateFieldLogic({
+								choiceFilter: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				<label>
+					<input
+						type="checkbox"
+						checked={Boolean(
+							(field.odkBind as { randomizeChoices?: unknown } | undefined)?.randomizeChoices
+						)}
+						onchange={(event) =>
+							updateFieldLogic({
+								randomizeChoices: (event.currentTarget as HTMLInputElement).checked
+							})}
+					/>
+					Randomize choices
+				</label>
+				<label>
+					{@render labelText('Randomization seed')}
+					<input
+						value={asString(
+							(field.odkBind as { randomizeSeed?: unknown } | undefined)?.randomizeSeed
+						)}
+						oninput={(event) =>
+							updateFieldLogic({
+								randomizeSeed: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+			{/if}
+			{#if field.type === 'geopoint'}
+				<label>
+					{@render labelText('Capture accuracy')}
+					<input
+						type="number"
+						min="1"
+						value={asString(
+							(field.odkBind as { captureAccuracy?: unknown } | undefined)?.captureAccuracy
+						) ||
+							asString((field.input as { captureAccuracy?: unknown } | undefined)?.captureAccuracy)}
+						oninput={(event) =>
+							updateFieldInput({
+								captureAccuracy: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Warning accuracy')}
+					<input
+						type="number"
+						min="1"
+						value={asString(
+							(field.odkBind as { warningAccuracy?: unknown } | undefined)?.warningAccuracy
+						) ||
+							asString((field.input as { warningAccuracy?: unknown } | undefined)?.warningAccuracy)}
+						oninput={(event) =>
+							updateFieldInput({
+								warningAccuracy: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+			{/if}
+			{#if field.type === 'range'}
+				<label>
+					{@render labelText('Range start')}
+					<input
+						type="number"
+						value={asString((field.input as { rangeStart?: unknown } | undefined)?.rangeStart) ||
+							asString((field.odkBind as { rangeStart?: unknown } | undefined)?.rangeStart)}
+						oninput={(event) =>
+							updateFieldInput({
+								rangeStart: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Range end')}
+					<input
+						type="number"
+						value={asString((field.input as { rangeEnd?: unknown } | undefined)?.rangeEnd) ||
+							asString((field.odkBind as { rangeEnd?: unknown } | undefined)?.rangeEnd)}
+						oninput={(event) =>
+							updateFieldInput({
+								rangeEnd: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Range step')}
+					<input
+						type="number"
+						min="0"
+						step="any"
+						value={asString((field.input as { rangeStep?: unknown } | undefined)?.rangeStep) ||
+							asString((field.odkBind as { rangeStep?: unknown } | undefined)?.rangeStep)}
+						oninput={(event) =>
+							updateFieldInput({
+								rangeStep: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+			{/if}
+			{#if field.type === 'image'}
+				<label>
+					{@render labelText('Max pixels')}
+					<input
+						type="number"
+						min="1"
+						value={asString((field.input as { maxPixels?: unknown } | undefined)?.maxPixels) ||
+							asString((field.odkBind as { maxPixels?: unknown } | undefined)?.maxPixels)}
+						oninput={(event) =>
+							updateFieldInput({
+								maxPixels: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+			{/if}
 		</div>
 
 		<h3>Validation</h3>
 		<div class="property-grid compact">
+			{#if field.type === 'text' || field.type === 'textarea'}
+				<label>
+					{@render labelText('Min length')}
+					<input
+						type="number"
+						min="0"
+						value={asString((field.validation as { minLength?: unknown } | undefined)?.minLength)}
+						oninput={(event) =>
+							updateFieldValidation({
+								minLength: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Max length')}
+					<input
+						type="number"
+						min="1"
+						value={asString((field.validation as { maxLength?: unknown } | undefined)?.maxLength)}
+						oninput={(event) =>
+							updateFieldValidation({
+								maxLength: (event.currentTarget as HTMLInputElement).value
+									? Number((event.currentTarget as HTMLInputElement).value)
+									: undefined
+							})}
+					/>
+				</label>
+			{/if}
 			<label>
-				Min
+				{@render labelText('Min')}
 				<input
 					type="number"
 					value={asString((field.validation as { min?: unknown } | undefined)?.min)}
@@ -434,7 +803,7 @@
 				/>
 			</label>
 			<label>
-				Max
+				{@render labelText('Max')}
 				<input
 					type="number"
 					value={asString((field.validation as { max?: unknown } | undefined)?.max)}
@@ -447,7 +816,7 @@
 				/>
 			</label>
 			<label>
-				Pattern
+				{@render labelText('Pattern')}
 				<input
 					value={asString((field.validation as { pattern?: unknown } | undefined)?.pattern)}
 					oninput={(event) =>
@@ -456,74 +825,112 @@
 						})}
 				/>
 			</label>
-			<label>
-				Required message
-				<input
-					value={asString(
-						(field.validation as { requiredMessage?: unknown } | undefined)?.requiredMessage
-					)}
-					oninput={(event) =>
-						updateFieldValidation({
-							requiredMessage: (event.currentTarget as HTMLInputElement).value || undefined
-						})}
-				/>
-			</label>
+			{#if field.type === 'text' || field.type === 'textarea'}
+				<label>
+					{@render labelText('Entry mask')}
+					<input
+						placeholder="##-##-######"
+						value={asString((field.input as { mask?: unknown } | undefined)?.mask) ||
+							asString((field.validation as { inputMask?: unknown } | undefined)?.inputMask)}
+						oninput={(event) =>
+							updateFieldInput({
+								mask: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Text case')}
+					<select
+						value={asString(
+							(field.validation as { textTransform?: unknown } | undefined)?.textTransform
+						) || asString((field.input as { textTransform?: unknown } | undefined)?.textTransform)}
+						onchange={(event) =>
+							updateFieldInput({
+								textTransform: (event.currentTarget as HTMLSelectElement).value || undefined
+							})}
+					>
+						<option value="">As typed</option>
+						<option value="uppercase">Uppercase</option>
+						<option value="lowercase">Lowercase</option>
+						<option value="titlecase">Title case</option>
+					</select>
+				</label>
+			{/if}
 		</div>
 
 		{#if field.type === 'single_choice' || field.type === 'multi_choice'}
 			<h3>Options</h3>
 			<div class="option-list">
 				{#each choicesFor(field) as choice, index (`${choice.value ?? index}-${index}`)}
-					<div class="option-row">
-						<input
-							aria-label="Option value"
-							value={asString(choice.value)}
-							oninput={(event) =>
-								selection &&
-								onUpdateOption(selection, index, {
-									value: (event.currentTarget as HTMLInputElement).value
-								})}
-						/>
-						<input
-							aria-label="Option label"
-							value={asString(choice.label)}
-							oninput={(event) =>
-								selection &&
-								onUpdateOption(selection, index, {
-									label: (event.currentTarget as HTMLInputElement).value
-								})}
-						/>
-						<input
-							aria-label="Option SNOMED code"
-							value={asString(choice.code)}
-							oninput={(event) =>
-								selection &&
-								onUpdateOption(selection, index, {
-									codeSystem: (event.currentTarget as HTMLInputElement).value
-										? 'snomed-ct'
-										: undefined,
-									code: (event.currentTarget as HTMLInputElement).value || undefined
-								})}
-						/>
-						<button type="button" onclick={() => selection && onRemoveOption(selection, index)}>
-							Remove
-						</button>
+					<div class="option-card">
+						<div class="option-header">
+							<strong>Option {index + 1}</strong>
+							<button
+								type="button"
+								class="remove-option"
+								onclick={() => selection && onRemoveOption(selection, index)}
+							>
+								Remove
+							</button>
+						</div>
+						<div class="option-row">
+							<label>
+								{@render labelText('Value')}
+								<input
+									value={asString(choice.value)}
+									oninput={(event) =>
+										selection &&
+										onUpdateOption(selection, index, {
+											value: (event.currentTarget as HTMLInputElement).value
+										})}
+								/>
+							</label>
+							<label>
+								{@render labelText('Label')}
+								<input
+									value={asString(choice.label)}
+									oninput={(event) =>
+										selection &&
+										onUpdateOption(selection, index, {
+											label: (event.currentTarget as HTMLInputElement).value
+										})}
+								/>
+							</label>
+						</div>
 						{#if languages.length > 1}
-							<input
-								class="localized-option"
-								aria-label={`Option label in ${activeLanguage}`}
-								value={localizedValue(choice.localizedLabel, activeLanguage)}
-								oninput={(event) =>
-									selection &&
-									onUpdateOption(selection, index, {
-										localizedLabel: withLocalizedValue(
-											choice.localizedLabel,
-											activeLanguage,
-											(event.currentTarget as HTMLInputElement).value
-										)
-									})}
-							/>
+							<label>
+								Label in {activeLanguage}
+								<input
+									value={localizedValue(choice.localizedLabel, activeLanguage)}
+									oninput={(event) =>
+										selection &&
+										onUpdateOption(selection, index, {
+											localizedLabel: withLocalizedValue(
+												choice.localizedLabel,
+												activeLanguage,
+												(event.currentTarget as HTMLInputElement).value
+											)
+										})}
+								/>
+							</label>
 						{/if}
+						<details class="option-coding">
+							<summary>Coding</summary>
+							<label>
+								{@render labelText('SNOMED CT code')}
+								<input
+									value={asString(choice.code)}
+									oninput={(event) =>
+										selection &&
+										onUpdateOption(selection, index, {
+											codeSystem: (event.currentTarget as HTMLInputElement).value
+												? 'snomed-ct'
+												: undefined,
+											code: (event.currentTarget as HTMLInputElement).value || undefined
+										})}
+								/>
+							</label>
+						</details>
 					</div>
 				{/each}
 				<button type="button" onclick={() => selection && onAddOption(selection)}>Add Option</button
@@ -531,10 +938,10 @@
 			</div>
 		{/if}
 
-		<h3>SNOMED CT</h3>
+		<h3>SNOMED CT Coding</h3>
 		<div class="property-grid">
 			<label>
-				Concept ID
+				{@render labelText('Concept ID')}
 				<input
 					value={asString((field.snomed as { conceptId?: unknown } | undefined)?.conceptId)}
 					oninput={(event) =>
@@ -544,7 +951,7 @@
 				/>
 			</label>
 			<label>
-				Preferred term
+				{@render labelText('Preferred term')}
 				<input
 					value={asString((field.snomed as { preferredTerm?: unknown } | undefined)?.preferredTerm)}
 					oninput={(event) =>
@@ -555,26 +962,116 @@
 			</label>
 		</div>
 
-		<h3>Field JSON</h3>
-		<pre>{fieldJson}</pre>
+		<details class="advanced-group">
+			<summary>Advanced JSON</summary>
+			<pre>{fieldJson}</pre>
+		</details>
 	{:else}
 		<p class="error">The selected field could not be resolved from the current draft.</p>
 	{/if}
 </section>
 
 <style>
+	.inspector-panel {
+		max-height: calc(100vh - 9rem);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-gutter: stable;
+	}
+	.inspector-panel h2 {
+		position: sticky;
+		top: -1rem;
+		z-index: 1;
+		margin: -1rem -1rem 0.75rem;
+		padding: 1rem 1rem 0.75rem;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface-card);
+	}
 	h3 {
-		margin: 0.95rem 0 0.4rem;
+		margin: 1rem 0 0.5rem;
+		padding-top: 0.8rem;
+		border-top: 1px solid var(--color-border);
 		font-size: 0.9rem;
 		color: var(--color-rpc-navy);
+		letter-spacing: 0;
+	}
+	h2 + h3 {
+		margin-top: 0;
+		padding-top: 0;
+		border-top: 0;
 	}
 	.property-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 		gap: 0.65rem;
 	}
 	.property-grid.compact {
-		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	label {
+		min-width: 0;
+	}
+	.label-head {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		width: fit-content;
+	}
+	.help-dot {
+		position: relative;
+		display: inline-flex;
+		justify-content: center;
+		align-items: center;
+		width: 0.9rem;
+		height: 0.9rem;
+		border: 1px solid var(--color-border-strong);
+		border-radius: 999px;
+		background: var(--color-surface-muted, #f6f7f9);
+		color: var(--color-text-muted);
+		font-size: 0.65rem;
+		font-weight: 800;
+		line-height: 1;
+		cursor: help;
+	}
+	.help-dot::after {
+		content: attr(data-tip);
+		position: absolute;
+		z-index: 20;
+		left: 0;
+		top: calc(100% + 0.35rem);
+		display: none;
+		width: min(17rem, calc(100vw - 3rem));
+		padding: 0.4rem 0.55rem;
+		border: 1px solid var(--color-border-strong);
+		border-radius: 0.35rem;
+		background: #111827;
+		color: #fff;
+		box-shadow: 0 0.4rem 1rem rgb(15 23 42 / 18%);
+		font-size: 0.78rem;
+		font-weight: 700;
+		line-height: 1.3;
+		white-space: normal;
+	}
+	.help-dot:hover::after,
+	.help-dot:focus::after {
+		display: block;
+	}
+	input:not([type='checkbox']),
+	select {
+		width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
+	}
+	input[type='checkbox'] {
+		width: 1rem;
+		height: 1rem;
+		min-width: 1rem;
+		box-sizing: border-box;
+		flex: none;
+	}
+	input[type='color'] {
+		height: 2.5rem;
+		padding: 0.2rem;
 	}
 	.check-row,
 	.toolbar {
@@ -592,18 +1089,53 @@
 	}
 	.option-list {
 		display: grid;
-		gap: 0.45rem;
+		gap: 0.65rem;
+	}
+	.option-card {
+		display: grid;
+		gap: 0.5rem;
+		padding: 0.65rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.45rem;
+		background: var(--color-surface-muted, #f6f7f9);
+	}
+	.option-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.remove-option {
+		padding: 0.35rem 0.55rem;
+		border-color: #f2b8b5;
+		background: #fff8f7;
+		color: #9f1d1d;
 	}
 	.option-row {
 		display: grid;
-		grid-template-columns: minmax(6rem, 0.7fr) minmax(10rem, 1.2fr) minmax(7rem, 0.8fr) auto;
-		gap: 0.4rem;
-		align-items: center;
+		grid-template-columns: minmax(6rem, 0.7fr) minmax(10rem, 1.3fr);
+		gap: 0.55rem;
 	}
-	.localized-option {
-		grid-column: 1 / -1;
+	.option-coding summary {
+		cursor: pointer;
+		font-weight: 800;
+		color: var(--color-text-muted);
+	}
+	.option-coding label {
+		margin-top: 0.45rem;
+	}
+	.advanced-group {
+		margin-top: 1rem;
+		padding-top: 0.8rem;
+		border-top: 1px solid var(--color-border);
+	}
+	.advanced-group summary {
+		cursor: pointer;
+		font-weight: 800;
+		color: var(--color-rpc-navy);
 	}
 	pre {
+		margin-top: 0.65rem;
 		max-height: 16rem;
 		overflow: auto;
 		background: var(--color-surface-muted, #f6f7f9);
@@ -613,6 +1145,9 @@
 		font-size: 0.8rem;
 	}
 	@media (max-width: 720px) {
+		.property-grid.compact {
+			grid-template-columns: 1fr;
+		}
 		.option-row {
 			grid-template-columns: 1fr;
 		}

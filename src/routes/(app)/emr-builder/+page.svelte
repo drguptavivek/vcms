@@ -1,8 +1,34 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { base, resolve } from '$app/paths';
 	import Icon from '$lib/components/ui/Icon.svelte';
 
 	let { data } = $props();
+	let newTitle = $state('');
+	let newDefinitionId = $state('');
+	let newNoteType = $state('opd');
+
+	function slugify(value: string): string {
+		const normalized = value
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '')
+			.replace(/-{2,}/g, '-');
+		return /^[a-z]/.test(normalized) ? normalized : `form-${normalized || 'new'}`;
+	}
+
+	let effectiveNewDefinitionId = $derived(slugify(newDefinitionId || newTitle || 'new-form'));
+	let canCreateForm = $derived(effectiveNewDefinitionId.length > 0);
+
+	function openNewForm(event: SubmitEvent) {
+		event.preventDefault();
+		if (!canCreateForm) return;
+		const params = new URLSearchParams();
+		if (newTitle.trim()) params.set('title', newTitle.trim());
+		if (newNoteType.trim()) params.set('noteType', newNoteType.trim());
+		const query = params.toString();
+		window.location.href = `${base}/emr-builder/${effectiveNewDefinitionId}/edit${query ? `?${query}` : ''}`;
+	}
 </script>
 
 <svelte:head>
@@ -12,13 +38,63 @@
 <header class="page-head">
 	<div>
 		<h1>EMR Builder</h1>
-		<p>Manage published clinical form definitions, XLSForm imports, and runtime/mobile usage.</p>
+		<p>Create and manage VCMS clinical form definitions for runtime and mobile use.</p>
 	</div>
-	<a class="primary-action" href={resolve('/emr-builder/pec-opd-register/edit')}>
+	<a class="primary-action" href="#new-form">
 		<Icon name="forms" />
-		Open OPD Form
+		New Form
 	</a>
 </header>
+
+<section id="new-form" class="card create-panel">
+	<div>
+		<h2>Create Form</h2>
+		<p class="muted">
+			Start from the VCMS Builder schema and add sections, fields, rules, and input behavior.
+		</p>
+	</div>
+	<form class="create-grid" onsubmit={openNewForm}>
+		<label>
+			Form title
+			<input
+				value={newTitle}
+				placeholder="OPD Eye Exam"
+				oninput={(event) => {
+					newTitle = (event.currentTarget as HTMLInputElement).value;
+				}}
+			/>
+		</label>
+		<label>
+			Form ID
+			<input
+				value={newDefinitionId}
+				placeholder={effectiveNewDefinitionId}
+				pattern="[a-z][a-z0-9._-]*"
+				oninput={(event) => {
+					newDefinitionId = (event.currentTarget as HTMLInputElement).value;
+				}}
+			/>
+		</label>
+		<label>
+			Form type
+			<select
+				value={newNoteType}
+				onchange={(event) => {
+					newNoteType = (event.currentTarget as HTMLSelectElement).value;
+				}}
+			>
+				<option value="opd">OPD</option>
+				<option value="follow-up">Follow-up</option>
+				<option value="procedure">Procedure</option>
+				<option value="screening">Screening</option>
+			</select>
+		</label>
+		<button type="submit" disabled={!canCreateForm}>
+			<Icon name="edit" />
+			Create
+		</button>
+	</form>
+</section>
 
 <section class="stats-grid" aria-label="EMR Builder summary">
 	<div class="stat-card">
@@ -35,7 +111,7 @@
 	</div>
 	<div class="stat-card">
 		<span>{data.summary.totalFields}</span>
-		<p>XLSForm Fields</p>
+		<p>Seeded Fields</p>
 	</div>
 </section>
 
@@ -43,9 +119,7 @@
 	<div class="section-title">
 		<div>
 			<h2>Forms</h2>
-			<p class="muted">
-				XLSForm-derived forms appear here even before they are saved as Builder drafts.
-			</p>
+			<p class="muted">Saved forms and seeded examples are listed together.</p>
 		</div>
 	</div>
 
@@ -170,6 +244,50 @@
 		align-items: flex-start;
 		gap: 1rem;
 		margin-bottom: 0.8rem;
+	}
+	.create-panel {
+		margin-bottom: 1rem;
+	}
+	.create-panel h2 {
+		margin-top: 0;
+	}
+	.create-grid {
+		display: grid;
+		grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 0.8fr) minmax(9rem, 0.55fr) auto;
+		gap: 0.75rem;
+		align-items: end;
+	}
+	.create-grid label {
+		display: grid;
+		gap: 0.3rem;
+		font-weight: 700;
+		color: var(--color-rpc-navy);
+	}
+	.create-grid input,
+	.create-grid select {
+		width: 100%;
+		padding: 0.55rem 0.65rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.5rem;
+		background: var(--color-surface-card);
+		color: var(--color-text);
+	}
+	.create-grid button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.35rem;
+		padding: 0.6rem 0.8rem;
+		border: 1px solid var(--color-rpc-teal);
+		border-radius: 0.5rem;
+		background: var(--color-rpc-teal);
+		color: var(--color-surface-card);
+		font-weight: 800;
+	}
+	@media (max-width: 900px) {
+		.create-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 	.table-wrap {
 		overflow-x: auto;

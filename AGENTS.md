@@ -35,18 +35,18 @@ src/lib/server/modules/<feature>/
 
 ## Workflow
 
-- Delegtae to  focused Spark subagents for planned bounded implementation when practical.
+- Delegtae to focused Spark or 5.4-mini subagents for planned bounded implementation when practical.
 - Use a security-audit subagent for new/changed routes before commit.
 - Use a documentation subagent for new/changed routes, workflows, and privilege-sensitive features.
 - Review subagent output before considering work complete.
 - Do not commit unless the user asks.
-- Always run svelte.svelte-autofixer by focused Spark subagents 
-
+- never send code text to svelte.svelte-autofixer., always send a svelte / ts file
+- Always run svelte.svelte-autofixer by focused Spark subagents or 5.4-mini subagent .
 
 ## SvelteKit
 
 - Use project Svelte MCP when available. - call via spark subagents
-- delegate  svelte.svelte-autofixer to a spark subagent
+- delegate svelte.svelte-autofixer to a spark subagent
 - For Svelte tasks: `list-sections`, then relevant `get-documentation`.
 - Run `svelte-autofixer` after Svelte edits until clean , call via spark subagents
 - Run `svelte-autofixer` on every changed `.svelte` file in full. - call via spark subagents
@@ -102,7 +102,6 @@ src/lib/server/modules/<feature>/
 - All Markdown needs YAML frontmatter.
 - Update indexes when files are added, renamed, deprecated, or materially changed.
 
-
 ## Quality
 
 - Never expose raw SQL errors.
@@ -110,6 +109,7 @@ src/lib/server/modules/<feature>/
 - Do not commit secrets, `.env`, local dumps, or generated build artifacts.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -150,6 +150,7 @@ bd close <id>         # Complete work
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push

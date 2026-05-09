@@ -343,6 +343,111 @@ describe('emr note definition schema', () => {
 		);
 	});
 
+	it('parses GPS fields with location capture metadata', () => {
+		const parsed = emrNoteDefinitionSchema.parse({
+			...baseDefinition,
+			layout: {
+				sections: [
+					{
+						...baseDefinition.layout.sections[0],
+						fields: [
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								id: 'store-gps',
+								key: 'store-gps',
+								type: 'geopoint',
+								choiceSet: undefined,
+								odkBind: {
+									xlsformName: 'store_gps',
+									parameters: 'capture-accuracy=10 warning-accuracy=10',
+									captureAccuracy: 10,
+									warningAccuracy: 10
+								}
+							},
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								id: 'pipe',
+								key: 'pipe',
+								label: 'Pipeline',
+								type: 'geotrace',
+								choiceSet: undefined,
+								order: 1
+							},
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								id: 'border',
+								key: 'border',
+								label: 'Border',
+								type: 'geoshape',
+								choiceSet: undefined,
+								order: 2
+							}
+						]
+					}
+				]
+			}
+		});
+
+		expect(parsed.layout.sections[0].fields.map((field) => field.type)).toEqual([
+			'geopoint',
+			'geotrace',
+			'geoshape'
+		]);
+		expect(parsed.layout.sections[0].fields[0].odkBind?.captureAccuracy).toBe(10);
+	});
+
+	it('parses text entry barcode, mask, and case-transform metadata', () => {
+		const parsed = emrNoteDefinitionSchema.parse({
+			...baseDefinition,
+			layout: {
+				sections: [
+					{
+						...baseDefinition.layout.sections[0],
+						fields: [
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								id: 'patient-code',
+								key: 'patient-code',
+								label: 'Patient code',
+								type: 'text',
+								fieldName: 'patient_code',
+								choiceSet: undefined,
+								validation: {
+									maxLength: 12
+								},
+								input: {
+									mask: '##-##-######',
+									textTransform: 'uppercase',
+									barcodeInput: true
+								},
+								logic: {
+									relevance: {
+										value: "${visit_type} = 'opd'"
+									},
+									constraint: {
+										value: '. != ""'
+									},
+									constraintMessage: 'Patient code is required.'
+								},
+								odkBind: {
+									xlsformName: 'patient_code'
+								}
+							}
+						]
+					}
+				]
+			}
+		});
+
+		expect(parsed.layout.sections[0].fields[0].validation?.maxLength).toBe(12);
+		expect(parsed.layout.sections[0].fields[0].input?.mask).toBe('##-##-######');
+		expect(parsed.layout.sections[0].fields[0].input?.textTransform).toBe('uppercase');
+		expect(parsed.layout.sections[0].fields[0].input?.barcodeInput).toBe(true);
+		expect(parsed.layout.sections[0].fields[0].logic?.constraintMessage).toBe(
+			'Patient code is required.'
+		);
+	});
+
 	it('rejects raw XLSForm expression strings in bind metadata', () => {
 		expect(() =>
 			emrNoteDefinitionSchema.parse({

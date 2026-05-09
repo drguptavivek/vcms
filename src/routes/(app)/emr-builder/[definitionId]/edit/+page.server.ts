@@ -7,7 +7,10 @@ import { emrBuilderDefinitionQuerySchema } from '$lib/server/modules/emr-builder
 import { convertXlsformToEmrDefinition } from '$lib/server/modules/xlsform-import/xlsform-import';
 import { PEC_XLSFORMS } from '$lib/server/modules/xlsform-import/fixtures';
 import { isAppError } from '$lib/server/observability/errors';
-import type { EmrNoteDefinitionRecord } from '$lib/server/modules/emr-builder/emr-builder.types';
+import type {
+	EmrNoteDefinition,
+	EmrNoteDefinitionRecord
+} from '$lib/server/modules/emr-builder/emr-builder.types';
 
 type SerializableDefinitionRecord = Omit<
 	EmrNoteDefinitionRecord,
@@ -37,7 +40,58 @@ function toSerializableDefinitionRecord(
 	};
 }
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+function titleFromDefinitionId(definitionId: string): string {
+	return definitionId
+		.split(/[-_]+/)
+		.filter(Boolean)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(' ');
+}
+
+function makeStarterDefinition(
+	definitionId: string,
+	input?: { title?: string; noteType?: string }
+): EmrNoteDefinition {
+	const title = input?.title?.trim() || titleFromDefinitionId(definitionId) || 'New Form';
+	return {
+		metadata: {
+			definitionId,
+			slug: `${definitionId}-definition`,
+			title,
+			noteType: input?.noteType?.trim() || 'opd',
+			specialty: 'ophthalmology',
+			status: 'draft',
+			version: 1,
+			locale: 'en-IN',
+			languages: [],
+			tags: ['builder-native']
+		},
+		layout: {
+			sections: [
+				{
+					id: 'section_1',
+					title: 'Section 1',
+					kind: 'section',
+					fields: [],
+					sections: [],
+					rules: [],
+					order: 0,
+					collapsible: false,
+					defaultCollapsed: false
+				}
+			]
+		},
+		rules: [],
+		actions: [],
+		analytics: {
+			dimensions: [],
+			measures: [],
+			events: []
+		}
+	};
+}
+
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.user) redirect(302, '/login');
 
 	const parsed = emrBuilderDefinitionQuerySchema.safeParse({
@@ -74,7 +128,38 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			throw value;
 		}
 
-		if (!fixture) error(404, 'EMR definition not found.');
+		if (!fixture) {
+			const starter = makeStarterDefinition(definitionId, {
+				title: url.searchParams.get('title') ?? undefined,
+				noteType: url.searchParams.get('noteType') ?? undefined
+			});
+			return {
+				definitionId,
+				definitionRecord: {
+					id: `new-${definitionId}`,
+					definitionId,
+					slug: starter.metadata.slug,
+					title: starter.metadata.title,
+					noteType: starter.metadata.noteType,
+					specialty: starter.metadata.specialty ?? null,
+					status: 'draft',
+					version: starter.metadata.version,
+					versionHash: '',
+					locale: starter.metadata.locale,
+					tags: starter.metadata.tags,
+					ownerTeam: starter.metadata.ownerTeam ?? null,
+					effectiveFrom: null,
+					effectiveUntil: null,
+					createdBy: null,
+					updatedBy: null,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString()
+				},
+				draftPayload: starter,
+				fixtureDefinition: null,
+				message: 'Started a new Builder form. Save Draft will create it.'
+			};
+		}
 
 		const imported = convertXlsformToEmrDefinition(fixture);
 		return {
@@ -101,7 +186,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			},
 			draftPayload: imported.definition,
 			fixtureDefinition: imported.definition,
-			message: 'Loaded XLSForm-derived fixture. Save Draft will persist it in the Builder.'
+			message: 'Loaded imported fixture. Save Draft will persist it in the Builder.'
 		};
 	}
 };

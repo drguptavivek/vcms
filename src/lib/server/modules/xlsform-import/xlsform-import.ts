@@ -16,6 +16,7 @@ type XlsformTypeKind =
 	| 'text'
 	| 'integer'
 	| 'decimal'
+	| 'range'
 	| 'date'
 	| 'datetime'
 	| 'boolean'
@@ -23,12 +24,23 @@ type XlsformTypeKind =
 	| 'select_one'
 	| 'select_multiple'
 	| 'select_one_from_file'
+	| 'geopoint'
+	| 'geotrace'
+	| 'geoshape'
+	| 'image'
+	| 'barcode'
 	| 'begin_group'
 	| 'end_group'
+	| 'begin_repeat'
+	| 'end_repeat'
 	| 'start'
 	| 'end'
 	| 'today'
 	| 'deviceid'
+	| 'phonenumber'
+	| 'username'
+	| 'email'
+	| 'audit'
 	| 'calculate'
 	| 'default'
 	| 'instance'
@@ -54,10 +66,23 @@ type FieldMapContext = {
 	usedFieldKeys: Set<string>;
 };
 
-const SKIP_FIELD_TYPES = new Set<XlsformTypeKind>(['start', 'end', 'today', 'deviceid']);
+const SKIP_FIELD_TYPES = new Set<XlsformTypeKind>([
+	'start',
+	'end',
+	'today',
+	'deviceid',
+	'phonenumber',
+	'username',
+	'email'
+]);
 const SYSTEM_NAME_PREFIXES = ['_'];
-const CALCULATION_TYPES = new Set<XlsformTypeKind>(['calculate', 'default', 'instance']);
-const GROUP_TYPES = new Set<XlsformTypeKind>(['begin_group', 'end_group']);
+const CALCULATION_TYPES = new Set<XlsformTypeKind>(['default', 'instance']);
+const GROUP_TYPES = new Set<XlsformTypeKind>([
+	'begin_group',
+	'end_group',
+	'begin_repeat',
+	'end_repeat'
+]);
 
 function normalizeName(value: string): string {
 	return safeTrim(value).toLowerCase().replace(/\s+/g, '');
@@ -113,6 +138,113 @@ function normalizeHelpText(value: string): string {
 	return truncate(safeTrim(value), 500);
 }
 
+function languageCodeFromHeader(header: string): string {
+	const match = header.match(/\(([^)]+)\)\s*$/);
+	return safeTrim(match?.[1]) || safeTrim(header);
+}
+
+function localizedColumns(
+	row: XlsformFixture['survey'][number],
+	prefix: string,
+	maxLength: number
+): Record<string, string> | undefined {
+	const localized = Object.fromEntries(
+		Object.entries(row)
+			.filter(([key, value]) => key.startsWith(`${prefix}::`) && safeTrim(value))
+			.map(([key, value]) => [
+				languageCodeFromHeader(key.substring(prefix.length + 2)),
+				truncate(safeTrim(value), maxLength)
+			])
+	);
+	return Object.keys(localized).length > 0 ? localized : undefined;
+}
+
+function collectLanguages(form: XlsformFixture): string[] {
+	const languages = new Set<string>();
+	for (const row of form.survey || []) {
+		for (const key of Object.keys(row)) {
+			if (!key.includes('::')) continue;
+			languages.add(languageCodeFromHeader(key.split('::')[1]));
+		}
+	}
+	const defaultLanguage = safeTrim(form.form_settings?.default_language);
+	if (defaultLanguage) languages.add(languageCodeFromHeader(defaultLanguage));
+	return Array.from(languages);
+}
+
+function fieldMedia(row: XlsformFixture['survey'][number]) {
+	const media = {
+		image: safeTrim(row.image) || undefined,
+		video: safeTrim(row.video) || undefined,
+		audio: safeTrim(row.audio) || undefined,
+		localizedImage: localizedColumns(row, 'image', 300),
+		localizedVideo: localizedColumns(row, 'video', 300),
+		localizedAudio: localizedColumns(row, 'audio', 300)
+	};
+	return Object.values(media).some(Boolean) ? media : undefined;
+}
+
+function parseXlsformParameters(value: unknown) {
+	const raw = safeTrim(value);
+	if (!raw) return {};
+
+	const output: {
+		parameters?: string;
+		captureAccuracy?: number;
+		warningAccuracy?: number;
+		rangeStart?: number;
+		rangeEnd?: number;
+		rangeStep?: number;
+		maxPixels?: number;
+		locationPriority?: 'high-accuracy' | 'balanced' | 'low-power' | 'no-power';
+		locationMinInterval?: number;
+		locationMaxAge?: number;
+		randomizeChoices?: boolean;
+		randomizeSeed?: string;
+	} = {
+		parameters: truncate(raw, 500)
+	};
+
+	for (const part of raw.split(/[\s,]+/)) {
+		const [key, rawValue] = part.split('=');
+		if (key === 'randomize') {
+			output.randomizeChoices = rawValue === 'true';
+			continue;
+		}
+		if (key === 'seed' && safeTrim(rawValue)) {
+			output.randomizeSeed = truncate(safeTrim(rawValue), 200);
+			continue;
+		}
+		if (
+			key === 'location-priority' &&
+			(rawValue === 'high-accuracy' ||
+				rawValue === 'balanced' ||
+				rawValue === 'low-power' ||
+				rawValue === 'no-power')
+		) {
+			output.locationPriority = rawValue;
+			continue;
+		}
+
+		const numericValue = Number(rawValue);
+		if (!Number.isFinite(numericValue) || numericValue <= 0) continue;
+		if (key === 'capture-accuracy') output.captureAccuracy = numericValue;
+		if (key === 'warning-accuracy') output.warningAccuracy = numericValue;
+		if (key === 'start') output.rangeStart = numericValue;
+		if (key === 'end') output.rangeEnd = numericValue;
+		if (key === 'step') output.rangeStep = numericValue;
+		if (key === 'max-pixels' && Number.isInteger(numericValue)) output.maxPixels = numericValue;
+		if (key === 'location-min-interval' && Number.isInteger(numericValue)) {
+			output.locationMinInterval = numericValue;
+		}
+		if (key === 'location-max-age' && Number.isInteger(numericValue)) {
+			output.locationMaxAge = numericValue;
+		}
+	}
+
+	return output;
+}
+
 function parseXlsFieldType(rawType: string): ParsedXlsFieldType {
 	const normalized = safeTrim(rawType).toLowerCase();
 	if (!normalized) {
@@ -130,6 +262,9 @@ function parseXlsFieldType(rawType: string): ParsedXlsFieldType {
 	if (value === 'decimal' || value === 'decimal ') {
 		return { kind: 'decimal' };
 	}
+	if (value === 'range') {
+		return { kind: 'range' };
+	}
 	if (value === 'date') {
 		return { kind: 'date' };
 	}
@@ -141,6 +276,15 @@ function parseXlsFieldType(rawType: string): ParsedXlsFieldType {
 	}
 	if (value === 'note') {
 		return { kind: 'note' };
+	}
+	if (value === 'geopoint' || value === 'geotrace' || value === 'geoshape') {
+		return { kind: value };
+	}
+	if (value === 'image') {
+		return { kind: 'image' };
+	}
+	if (value === 'barcode') {
+		return { kind: 'barcode' };
 	}
 	if (value.startsWith('select_one_from_file')) {
 		const listName = safeTrim(original.substring('select_one_from_file'.length));
@@ -160,8 +304,37 @@ function parseXlsFieldType(rawType: string): ParsedXlsFieldType {
 	if (value === 'end_group') {
 		return { kind: 'end_group' };
 	}
-	if (value === 'start' || value === 'end' || value === 'today' || value === 'deviceid') {
+	if (value === 'begin_repeat') {
+		return { kind: 'begin_repeat' };
+	}
+	if (value === 'end_repeat') {
+		return { kind: 'end_repeat' };
+	}
+	if (value === 'begin group') {
+		return { kind: 'begin_group' };
+	}
+	if (value === 'end group') {
+		return { kind: 'end_group' };
+	}
+	if (value === 'begin repeat') {
+		return { kind: 'begin_repeat' };
+	}
+	if (value === 'end repeat') {
+		return { kind: 'end_repeat' };
+	}
+	if (
+		value === 'start' ||
+		value === 'end' ||
+		value === 'today' ||
+		value === 'deviceid' ||
+		value === 'phonenumber' ||
+		value === 'username' ||
+		value === 'email'
+	) {
 		return { kind: value as XlsformTypeKind };
+	}
+	if (value === 'audit') {
+		return { kind: 'audit' };
 	}
 	if (value === 'calculate' || value === 'default' || value === 'instance') {
 		return { kind: value as XlsformTypeKind };
@@ -447,6 +620,16 @@ function mapField(row: XlsformFixture['survey'][number], context: FieldMapContex
 				return 'single_choice';
 			case 'select_multiple':
 				return 'multi_choice';
+			case 'geopoint':
+			case 'geotrace':
+			case 'geoshape':
+			case 'range':
+			case 'image':
+			case 'audit':
+			case 'calculate':
+				return rawType.kind;
+			case 'barcode':
+				return 'text';
 			case 'note':
 				return 'instructions';
 			case 'datetime':
@@ -509,58 +692,93 @@ function mapField(row: XlsformFixture['survey'][number], context: FieldMapContex
 		}
 	}
 
-	if (safeTrim(row.relevant)) {
-		addIssue(
-			context.issues,
-			'unsupported-expression',
-			'relevant-expression',
-			name,
-			safeTrim(row.relevant)
-		);
-	}
-
-	if (safeTrim(row.choice_filter)) {
-		addIssue(
-			context.issues,
-			'unsupported-filter',
-			'choice-filter',
-			name,
-			safeTrim(row.choice_filter)
-		);
-	}
-
-	if (safeTrim(row.calculation)) {
-		addIssue(
-			context.issues,
-			'unsupported-expression',
-			'calculation',
-			name,
-			safeTrim(row.calculation)
-		);
-	}
+	const readOnlyValue = safeTrim(row.read_only) || safeTrim(row.readonly);
+	const isReadOnly = ['true', 'yes'].includes(readOnlyValue.toLowerCase());
+	const isHiddenCalculation =
+		Boolean(safeTrim(row.calculation)) && !safeTrim(row.label) && !safeTrim(row.hint);
+	const requiredExpression =
+		safeTrim(row.required) && !isRequired ? { value: safeTrim(row.required) } : undefined;
+	const parameterMetadata = parseXlsformParameters(row.parameters);
+	const fieldLogic = {
+		required: requiredExpression,
+		relevance: safeTrim(row.relevant) ? { value: safeTrim(row.relevant) } : undefined,
+		constraint: safeTrim(row.constraint) ? { value: safeTrim(row.constraint) } : undefined,
+		constraintMessage: safeTrim(row.constraint_message) || undefined,
+		calculation: safeTrim(row.calculation) ? { value: safeTrim(row.calculation) } : undefined,
+		trigger: safeTrim(row.trigger) || undefined,
+		choiceFilter: safeTrim(row.choice_filter) || undefined,
+		randomizeChoices: parameterMetadata.randomizeChoices,
+		randomizeSeed: parameterMetadata.randomizeSeed
+	};
+	const fieldInput = {
+		barcodeInput: rawType.kind === 'barcode' || undefined,
+		captureAccuracy: parameterMetadata.captureAccuracy,
+		warningAccuracy: parameterMetadata.warningAccuracy,
+		rangeStart: parameterMetadata.rangeStart,
+		rangeEnd: parameterMetadata.rangeEnd,
+		rangeStep: parameterMetadata.rangeStep,
+		maxPixels: parameterMetadata.maxPixels,
+		locationPriority: parameterMetadata.locationPriority,
+		locationMinInterval: parameterMetadata.locationMinInterval,
+		locationMaxAge: parameterMetadata.locationMaxAge
+	};
 
 	context.section.section.fields.push({
 		id: fieldId,
 		key: fieldId,
 		label: normalizeLabel(label || name),
+		...(localizedColumns(row, 'label', 200)
+			? { localizedLabel: localizedColumns(row, 'label', 200) }
+			: {}),
 		type: mappedType,
 		order: context.section.order++,
 		required: isRequired,
+		fieldName: name,
 		xlsv1Name: name,
 		...(safeTrim(row.hint) ? { helpText: normalizeHelpText(safeTrim(row.hint)) } : {}),
-		hidden: false,
+		...(localizedColumns(row, 'hint', 500)
+			? { localizedHint: localizedColumns(row, 'hint', 500) }
+			: {}),
+		...(safeTrim(row.guidance_hint)
+			? { guidanceHint: truncate(safeTrim(row.guidance_hint), 1000) }
+			: {}),
+		...(localizedColumns(row, 'guidance_hint', 1000)
+			? { localizedGuidanceHint: localizedColumns(row, 'guidance_hint', 1000) }
+			: {}),
+		...(fieldMedia(row) ? { media: fieldMedia(row) } : {}),
+		hidden: isHiddenCalculation,
 		analytics: [],
 		width: 'full',
-		readOnly: false,
+		readOnly: isReadOnly,
 		defaultValue: safeTrim(row.default) || undefined,
+		appearance: safeTrim(row.appearance) || undefined,
+		logic: Object.values(fieldLogic).some((value) => value !== undefined) ? fieldLogic : undefined,
+		input: Object.values(fieldInput).some((value) => value !== undefined) ? fieldInput : undefined,
 		odkBind: {
 			xlsformName: name,
+			required: requiredExpression,
 			appearance: safeTrim(row.appearance) || undefined,
-			choiceSource: rawType.kind === 'select_one_from_file' ? rawType.listName : undefined
+			choiceSource: rawType.kind === 'select_one_from_file' ? rawType.listName : undefined,
+			choiceFilter: safeTrim(row.choice_filter) || undefined,
+			relevant: safeTrim(row.relevant) ? { value: safeTrim(row.relevant) } : undefined,
+			constraint: safeTrim(row.constraint) ? { value: safeTrim(row.constraint) } : undefined,
+			constraintMessage: safeTrim(row.constraint_message) || undefined,
+			calculation: safeTrim(row.calculation) ? { value: safeTrim(row.calculation) } : undefined,
+			trigger: safeTrim(row.trigger) || undefined,
+			barcodeInput: rawType.kind === 'barcode' || undefined,
+			...parameterMetadata
 		},
-		...(validation ? { validation } : {}),
+		...(validation || safeTrim(row.required_message)
+			? {
+					validation: {
+						...(validation ?? {}),
+						requiredMessage: safeTrim(row.required_message) || undefined
+					}
+				}
+			: {}),
 		...(choiceSet ? { choiceSet } : {}),
-		...(rawType.kind === 'note' ? { readOnly: true, readonly: true } : {})
+		...(rawType.kind === 'note' ? { readOnly: true, readonly: true } : {}),
+		...(isReadOnly ? { readonly: true } : {})
 	});
 
 	if (choiceSet?.choices?.length === 0) {
@@ -579,7 +797,10 @@ function mapField(row: XlsformFixture['survey'][number], context: FieldMapContex
 function createSection(
 	offlineName: string,
 	kind: EmrLayoutSection['kind'],
-	order: number
+	order: number,
+	relevant?: string,
+	repeatCount?: string,
+	appearance?: string
 ): EmrLayoutSection {
 	const id = slugifyId(offlineName || `section-${order}`);
 	const title = safeTrim(offlineName) || 'Section';
@@ -592,7 +813,10 @@ function createSection(
 		sections: [],
 		rules: [],
 		odk: {
-			xlsformName: offlineName
+			xlsformName: offlineName,
+			appearance: safeTrim(appearance) || undefined,
+			relevant: safeTrim(relevant) || undefined,
+			repeat: safeTrim(repeatCount) ? { count: { value: safeTrim(repeatCount) } } : undefined
 		},
 		collapsible: false,
 		defaultCollapsed: false
@@ -619,6 +843,9 @@ export function convertXlsformToEmrDefinition(form: XlsformFixture): XlsformImpo
 	const choiceGroups = collectChoiceGroups(form.choices || []);
 	const entityRows = collectEntityRows(form.entities || []);
 	const usedFieldKeys = new Set<string>();
+	const languages = collectLanguages(form);
+	const defaultLanguage = safeTrim(form.form_settings?.default_language);
+	const formStyle = safeTrim(form.form_settings?.style);
 
 	const rootSection: EmrLayoutSection = createSection(
 		form.form_settings?.form_title || form.form,
@@ -638,9 +865,16 @@ export function convertXlsformToEmrDefinition(form: XlsformFixture): XlsformImpo
 	for (const row of form.survey || []) {
 		const parsed = parseXlsFieldType(safeTrim(row.type));
 
-		if (parsed.kind === 'begin_group') {
+		if (parsed.kind === 'begin_group' || parsed.kind === 'begin_repeat') {
 			const groupTitle = mapSectionName(safeTrim(row.name), safeTrim(row.label));
-			const groupSection = createSection(groupTitle, 'group', nextSectionOrder++);
+			const groupSection = createSection(
+				groupTitle,
+				parsed.kind === 'begin_repeat' ? 'repeatable_group' : 'group',
+				nextSectionOrder++,
+				safeTrim(row.relevant),
+				safeTrim(row.repeat_count),
+				safeTrim(row.appearance)
+			);
 			const parent = stack[stack.length - 1];
 			parent.section.sections.push(groupSection);
 			parent.order = Math.max(
@@ -652,19 +886,10 @@ export function convertXlsformToEmrDefinition(form: XlsformFixture): XlsformImpo
 				order: 0,
 				fieldIds: new Set()
 			});
-			if (safeTrim(row.relevant)) {
-				addIssue(
-					issues,
-					'unsupported-expression',
-					'group-relevant',
-					row.name,
-					safeTrim(row.relevant)
-				);
-			}
 			continue;
 		}
 
-		if (parsed.kind === 'end_group') {
+		if (parsed.kind === 'end_group' || parsed.kind === 'end_repeat') {
 			if (stack.length > 1) {
 				stack.pop();
 			}
@@ -706,6 +931,9 @@ export function convertXlsformToEmrDefinition(form: XlsformFixture): XlsformImpo
 			noteType,
 			specialty: 'ophthalmology',
 			version: parseNumericVersion(form.form_settings?.version),
+			defaultLanguage: defaultLanguage || undefined,
+			languages,
+			formStyle: formStyle || undefined,
 			tags: ['xlsform-import', 'pec-forms', `source-${slugifyId(form.form).slice(0, 90)}`],
 			description: safeTrim(
 				`Source XLSForm ${safeTrim(form.form)}${form.form_settings?.form_id ? ` (${form.form_settings.form_id})` : ''}`

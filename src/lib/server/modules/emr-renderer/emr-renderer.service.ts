@@ -126,8 +126,16 @@ export class EmrRendererService {
 		field: EmrNoteDefinition['layout']['sections'][number]['fields'][number],
 		answers: EmrRenderContext
 	): EmrRenderedField {
-		const required = this.resolveBooleanBinding(field.odkBind?.required, answers, field.required);
-		const relevant = this.resolveBooleanBinding(field.odkBind?.relevant, answers, true);
+		const required = this.resolveBooleanBinding(
+			field.logic?.required ?? field.odkBind?.required,
+			answers,
+			field.required
+		);
+		const relevant = this.resolveBooleanBinding(
+			field.logic?.relevance ?? field.odkBind?.relevant,
+			answers,
+			true
+		);
 		const readOnly = this.resolveBooleanBinding(
 			field.odkBind?.readOnly,
 			answers,
@@ -135,11 +143,14 @@ export class EmrRendererService {
 		);
 
 		const constraint = this.resolveConstraintBinding(
-			field.odkBind?.constraint,
+			field.logic?.constraint ?? field.odkBind?.constraint,
 			answers,
-			field.odkBind?.constraintMessage
+			field.logic?.constraintMessage ?? field.odkBind?.constraintMessage
 		);
-		const calculation = this.resolveValueBinding(field.odkBind?.calculation, answers);
+		const calculation = this.resolveValueBinding(
+			field.logic?.calculation ?? field.odkBind?.calculation,
+			answers
+		);
 		const defaultValue = this.resolveValueBinding(
 			field.defaultValue as EmrExpressionValue | undefined,
 			answers

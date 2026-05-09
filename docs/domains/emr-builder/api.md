@@ -45,13 +45,17 @@ Every Builder route must use shared API helpers, request ID propagation, Zod val
 
 ## Definition Payload Contract
 
-The draft payload is the versioned `EmrNoteDefinition` JSON model. It intentionally preserves ODK/XLSForm concepts where practical:
+The draft payload is the versioned `EmrNoteDefinition` JSON model. The Builder schema is the source of truth:
 
-- `xlsv1Name` for original XLSForm field names.
-- `odkBind.required`, `odkBind.relevant`, `odkBind.constraint`, `odkBind.calculation`, `odkBind.readOnly`, `odkBind.constraintMessage`, `odkBind.appearance`, and `odkBind.choiceSource`.
+- `fieldName` for runtime/data field names.
+- `logic` for relevance, required expressions, calculations, triggers, constraints, choice filters, and choice randomization.
+- `input` for barcode input, text masks, text case transforms, range settings, GPS capture settings, image limits, and audit-location settings.
+- `validation` for required messages, text length limits, numeric bounds, and patterns.
 - section-level `odk` metadata for group/repeat behavior.
 - field-level SNOMED CT metadata, including numeric concept IDs.
 - external choice source references for master data, terminology, clinical worklists, and future API-backed lists.
+
+Legacy/import metadata such as `xlsv1Name` and `odkBind` can be retained for provenance and compatibility, but new runtime behavior should read the Builder fields first.
 
 The server validates this payload with Zod before saving or publishing. Runtime/mobile consumers should use published render models, not draft payloads.
 
