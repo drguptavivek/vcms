@@ -9,9 +9,9 @@ last_reviewed: 2026-05-09
 
 ## Scope
 
-The EMR Builder is a dedicated administrative module for clinical definition management. It owns section templates, field definitions, validation rules, care pathway graphs, publish workflows, version metadata, and retirement policy.
+The EMR Builder is a dedicated administrative module for clinical definition management. It owns section templates, field definitions, reusable dictionary assets, validation rules, care pathway graphs, publish workflows, version metadata, and retirement policy.
 
-The Builder does not own patient runtime records, encounters, signed notes, or runtime pathway execution.
+The Builder does not own patient runtime records, encounters, signed notes, or runtime pathway execution. Clinical data storage should be delegated to EHRbase through openEHR `COMPOSITION` save workflows.
 
 ## Documents
 

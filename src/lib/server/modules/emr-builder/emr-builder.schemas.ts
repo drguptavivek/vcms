@@ -14,6 +14,82 @@ const isoDateTimeSchema = z.string().datetime({ offset: true });
 const jsonPrimitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const expressionValueSchema = jsonPrimitiveSchema.or(z.array(jsonPrimitiveSchema));
 
+const openEhrArchetypeIdSchema = z
+	.string()
+	.trim()
+	.min(10)
+	.max(220)
+	.regex(/^open[Ee]HR-[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[Vv]\d+$/);
+const openEhrNodePathSchema = z
+	.string()
+	.trim()
+	.min(3)
+	.max(420)
+	.regex(
+		/^(?:\/?[A-Za-z][A-Za-z0-9_-]*(?:\[[Aa][Tt][0-9]+\])?)(?:\/[A-Za-z][A-Za-z0-9_-]*(?:\[[Aa][Tt][0-9]+\])?)*(?:\[[Aa][Tt][0-9]+\])?$/
+	)
+	.refine((value) => /\[[Aa][Tt][0-9]+\]/.test(value), {
+		message: 'archetype node/path must include an at-code segment.'
+	});
+const openEhrTemplateIdSchema = z
+	.string()
+	.trim()
+	.min(3)
+	.max(120)
+	.regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/);
+const openEhrTemplatePathSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(420)
+	.regex(/^\/?[A-Za-z0-9._/[\]-]+$/);
+const openEhrWebTemplatePathSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(420)
+	.regex(/^[A-Za-z0-9][A-Za-z0-9._|/-]*(?:\[[0-9]+\])?$/);
+const openEhrTerminologyCodeSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(200)
+	.regex(/^(?:[A-Za-z][A-Za-z0-9_.-]*::)?[A-Za-z0-9][A-Za-z0-9._-]*$/);
+const openEhrRmTypeSchema = z
+	.string()
+	.trim()
+	.min(2)
+	.max(120)
+	.regex(/^[A-Z][A-Za-z0-9_.]*(?:[A-Z_]+)?$/);
+const openEhrDataValueTypeSchema = z
+	.string()
+	.trim()
+	.min(2)
+	.max(120)
+	.regex(/^DV_[A-Z0-9_]+$/);
+
+const hasOpenEhrMappingEntry = (value: Record<string, unknown>): boolean =>
+	Object.values(value).some((entry) => entry !== undefined);
+
+export const emrOpenEhrMappingSchema = z
+	.object({
+		archetypeId: openEhrArchetypeIdSchema.optional(),
+		archetypePath: openEhrNodePathSchema.optional(),
+		templateId: openEhrTemplateIdSchema.optional(),
+		templatePath: openEhrTemplatePathSchema.optional(),
+		webTemplatePath: openEhrWebTemplatePathSchema.optional(),
+		terminologyCode: openEhrTerminologyCodeSchema.optional(),
+		rmType: openEhrRmTypeSchema.optional(),
+		dataValueType: openEhrDataValueTypeSchema.optional()
+	})
+	.refine((value) => hasOpenEhrMappingEntry(value), {
+		message: 'openEHR mapping must define at least one mapping field.'
+	});
+
+export const emrOpenEhrSectionMappingSchema = emrOpenEhrMappingSchema.extend({
+	archetypeStructure: z.enum(['ENTRY', 'CLUSTER']).optional()
+});
+
 export type EmrExpression =
 	| { field: string }
 	| { value: z.infer<typeof expressionValueSchema> }
@@ -145,6 +221,10 @@ export const emrDefinitionMetadataSchema = z
 		formStyle: z.string().trim().min(1).max(120).optional(),
 		tags: z.array(identifierSchema).max(30).default([]),
 		ownerTeam: identifierSchema.optional(),
+		compositionTemplateId: openEhrTemplateIdSchema.optional(),
+		compositionArchetypeId: openEhrArchetypeIdSchema.optional(),
+		compositionCategory: z.string().trim().min(1).max(160).optional(),
+		compositionSetting: z.string().trim().min(1).max(160).optional(),
 		effectiveFrom: isoDateTimeSchema.optional(),
 		effectiveUntil: isoDateTimeSchema.optional()
 	})
@@ -168,6 +248,9 @@ export const emrChoiceSchema = z
 		code: z.string().trim().min(1).max(120).optional(),
 		analyticsValue: z.string().trim().min(1).max(120).optional(),
 		disabled: z.boolean().default(false)
+	})
+	.extend({
+		openEhrMapping: emrOpenEhrMappingSchema.optional()
 	})
 	.refine((value) => !value.codeSystem || Boolean(value.code), {
 		message: 'code is required when codeSystem is set.',
@@ -318,6 +401,7 @@ export const emrFieldSchema = z
 		odkBind: emrOdkBindSchema.optional(),
 		analytics: z.array(emrAnalyticsHintSchema).max(20).default([]),
 		snomed: emrSnomedMetadataSchema.optional(),
+		openEhrMapping: emrOpenEhrMappingSchema.optional(),
 		required: z.boolean().default(false),
 		readOnly: z.boolean().default(false),
 		readonly: z.boolean().optional(),
@@ -400,6 +484,7 @@ export const emrLayoutSectionSchema: z.ZodType<{
 	fields: z.infer<typeof emrFieldSchema>[];
 	sections: EmrLayoutSection[];
 	rules: z.infer<typeof emrRuleSchema>[];
+	openEhrMapping?: z.infer<typeof emrOpenEhrSectionMappingSchema>;
 	odk?: {
 		xlsformName?: string;
 		appearance?: string;
@@ -424,6 +509,7 @@ export const emrLayoutSectionSchema: z.ZodType<{
 			fields: z.array(emrFieldSchema).max(200).default([]),
 			sections: z.array(emrLayoutSectionSchema).max(50).default([]),
 			rules: z.array(emrRuleSchema).max(100).default([]),
+			openEhrMapping: emrOpenEhrSectionMappingSchema.optional(),
 			odk: z
 				.object({
 					xlsformName: z.string().trim().min(1).max(120).optional(),

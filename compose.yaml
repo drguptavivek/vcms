@@ -10,5 +10,42 @@ services:
       POSTGRES_DB: ${DB_NAME}
     volumes:
       - pgdata:/var/lib/postgresql
+  ehrbase-db:
+    image: ehrbase/ehrbase-v2-postgres:16.2
+    restart: always
+    ports:
+      - ${EHRBASE_DB_PORT:-5443}:5432
+    environment:
+      POSTGRES_PASSWORD: ${EHRBASE_POSTGRES_PASSWORD:-postgres}
+      EHRBASE_USER: ${EHRBASE_DB_USER:-ehrbase}
+      EHRBASE_PASSWORD: ${EHRBASE_DB_PASSWORD:-ehrbase}
+    volumes:
+      - ehrbase_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${EHRBASE_DB_USER:-ehrbase} -d ehrbase']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  ehrbase:
+    image: ehrbase/ehrbase:latest
+    restart: always
+    ports:
+      - ${EHRBASE_PORT:-8080}:8080
+    environment:
+      DB_URL: jdbc:postgresql://ehrbase-db:5432/ehrbase
+      DB_USER: ${EHRBASE_DB_USER:-ehrbase}
+      DB_PASS: ${EHRBASE_DB_PASSWORD:-ehrbase}
+      SERVER_NODENAME: ${EHRBASE_SERVER_NODENAME:-vcms.local.ehrbase}
+      SECURITY_AUTHTYPE: ${EHRBASE_SECURITY_AUTHTYPE:-BASIC}
+      SECURITY_AUTHUSER: ${EHRBASE_AUTH_USER:-ehrbase-user}
+      SECURITY_AUTHPASSWORD: ${EHRBASE_AUTH_PASSWORD:-SuperSecretPassword}
+      SECURITY_AUTHADMINUSER: ${EHRBASE_ADMIN_USER:-ehrbase-admin}
+      SECURITY_AUTHADMINPASSWORD: ${EHRBASE_ADMIN_PASSWORD:-EvenMoreSecretPassword}
+      ADMINAPI_ACTIVE: ${EHRBASE_ADMIN_API_ACTIVE:-true}
+      MANAGEMENT_ENDPOINT_HEALTH_ENABLED: 'true'
+    depends_on:
+      ehrbase-db:
+        condition: service_healthy
 volumes:
   pgdata:
+  ehrbase_pgdata:

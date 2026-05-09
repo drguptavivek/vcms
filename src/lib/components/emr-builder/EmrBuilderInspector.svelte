@@ -107,11 +107,6 @@
 		updateField({ validation: { ...(field.validation as object | undefined), ...patch } });
 	}
 
-	function updateOdkBind(patch: Record<string, unknown>) {
-		if (!field) return;
-		updateField({ odkBind: { ...(field.odkBind as object | undefined), ...patch } });
-	}
-
 	function updateFieldLogic(patch: Record<string, unknown>) {
 		if (!field) return;
 		updateField({ logic: { ...(field.logic as object | undefined), ...patch } });
@@ -125,6 +120,26 @@
 	function updateSnomed(patch: Record<string, unknown>) {
 		if (!field) return;
 		updateField({ snomed: { ...(field.snomed as object | undefined), ...patch } });
+	}
+
+	function updateSectionOpenEhrMapping(patch: Record<string, unknown>) {
+		if (!section) return;
+		updateSection({
+			openEhrMapping: {
+				...(section.openEhrMapping as object | undefined),
+				...patch
+			}
+		});
+	}
+
+	function updateFieldOpenEhrMapping(patch: Record<string, unknown>) {
+		if (!field) return;
+		updateField({
+			openEhrMapping: {
+				...(field.openEhrMapping as object | undefined),
+				...patch
+			}
+		});
 	}
 
 	function choicesFor(field: EmrBuilderField) {
@@ -200,7 +215,16 @@
 		Value: 'Stored value for this option.',
 		'SNOMED CT code': 'Clinical code attached to this option or field.',
 		'Concept ID': 'SNOMED CT concept identifier for this field.',
-		'Preferred term': 'Human-readable clinical term for the selected concept.'
+		'Preferred term': 'Human-readable clinical term for the selected concept.',
+		'Web Template path':
+			'Flat path used when saving this value in an EHRbase Web Template composition.',
+		'Archetype ID': 'Clinical archetype that defines this reusable clinical concept.',
+		'Archetype path': 'Path inside the archetype for this section, field, or option.',
+		'Template ID': 'openEHR template that localizes the archetype for this form.',
+		'Template path': 'Canonical path inside the openEHR template.',
+		'RM type': 'openEHR Reference Model node type, such as ELEMENT or CLUSTER.',
+		'Data value type': 'openEHR data value type, such as DV_TEXT or DV_CODED_TEXT.',
+		'Structure type': 'Whether this section maps to an ENTRY or CLUSTER structure.'
 	};
 
 	function help(property: string) {
@@ -211,7 +235,7 @@
 {#snippet labelText(text: string)}
 	<span class="label-head">
 		<span>{text}</span>
-		<span class="help-dot" data-tip={help(text)} aria-label={help(text)}>i</span>
+		<span class="help-dot" data-tip={help(text)} aria-label={help(text)}>(i)</span>
 	</span>
 {/snippet}
 
@@ -302,6 +326,86 @@
 						/>
 					</label>
 				{/if}
+			</div>
+			<h3>openEHR Structure Mapping</h3>
+			<div class="property-grid">
+				<label>
+					{@render labelText('Web Template path')}
+					<input
+						value={asString(
+							(section.openEhrMapping as { webTemplatePath?: unknown } | undefined)?.webTemplatePath
+						)}
+						oninput={(event) =>
+							updateSectionOpenEhrMapping({
+								webTemplatePath: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Archetype ID')}
+					<input
+						value={asString(
+							(section.openEhrMapping as { archetypeId?: unknown } | undefined)?.archetypeId
+						)}
+						oninput={(event) =>
+							updateSectionOpenEhrMapping({
+								archetypeId: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Archetype path')}
+					<input
+						value={asString(
+							(section.openEhrMapping as { archetypePath?: unknown } | undefined)?.archetypePath
+						)}
+						oninput={(event) =>
+							updateSectionOpenEhrMapping({
+								archetypePath: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Template ID')}
+					<input
+						value={asString(
+							(section.openEhrMapping as { templateId?: unknown } | undefined)?.templateId
+						)}
+						oninput={(event) =>
+							updateSectionOpenEhrMapping({
+								templateId: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Template path')}
+					<input
+						value={asString(
+							(section.openEhrMapping as { templatePath?: unknown } | undefined)?.templatePath
+						)}
+						oninput={(event) =>
+							updateSectionOpenEhrMapping({
+								templatePath: (event.currentTarget as HTMLInputElement).value || undefined
+							})}
+					/>
+				</label>
+				<label>
+					{@render labelText('Structure type')}
+					<select
+						value={asString(
+							(section.openEhrMapping as { archetypeStructure?: unknown } | undefined)
+								?.archetypeStructure
+						)}
+						onchange={(event) =>
+							updateSectionOpenEhrMapping({
+								archetypeStructure: (event.currentTarget as HTMLSelectElement).value || undefined
+							})}
+					>
+						<option value="">Not mapped</option>
+						<option value="ENTRY">ENTRY</option>
+						<option value="CLUSTER">CLUSTER</option>
+					</select>
+				</label>
 			</div>
 			<h3>Section Behavior</h3>
 			<div class="check-row">
@@ -962,6 +1066,92 @@
 			</label>
 		</div>
 
+		<h3>openEHR Mapping</h3>
+		<div class="property-grid">
+			<label>
+				{@render labelText('Web Template path')}
+				<input
+					value={asString(
+						(field.openEhrMapping as { webTemplatePath?: unknown } | undefined)?.webTemplatePath
+					)}
+					oninput={(event) =>
+						updateFieldOpenEhrMapping({
+							webTemplatePath: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Archetype ID')}
+				<input
+					value={asString(
+						(field.openEhrMapping as { archetypeId?: unknown } | undefined)?.archetypeId
+					)}
+					oninput={(event) =>
+						updateFieldOpenEhrMapping({
+							archetypeId: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Archetype path')}
+				<input
+					value={asString(
+						(field.openEhrMapping as { archetypePath?: unknown } | undefined)?.archetypePath
+					)}
+					oninput={(event) =>
+						updateFieldOpenEhrMapping({
+							archetypePath: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Template ID')}
+				<input
+					value={asString(
+						(field.openEhrMapping as { templateId?: unknown } | undefined)?.templateId
+					)}
+					oninput={(event) =>
+						updateFieldOpenEhrMapping({
+							templateId: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Template path')}
+				<input
+					value={asString(
+						(field.openEhrMapping as { templatePath?: unknown } | undefined)?.templatePath
+					)}
+					oninput={(event) =>
+						updateFieldOpenEhrMapping({
+							templatePath: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('RM type')}
+				<input
+					value={asString((field.openEhrMapping as { rmType?: unknown } | undefined)?.rmType)}
+					oninput={(event) =>
+						updateFieldOpenEhrMapping({
+							rmType: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Data value type')}
+				<input
+					value={asString(
+						(field.openEhrMapping as { dataValueType?: unknown } | undefined)?.dataValueType
+					)}
+					oninput={(event) =>
+						updateFieldOpenEhrMapping({
+							dataValueType: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+		</div>
+
 		<details class="advanced-group">
 			<summary>Advanced JSON</summary>
 			<pre>{fieldJson}</pre>
@@ -1022,8 +1212,8 @@
 		display: inline-flex;
 		justify-content: center;
 		align-items: center;
-		width: 0.9rem;
-		height: 0.9rem;
+		width: 1.15rem;
+		height: 1.05rem;
 		border: 1px solid var(--color-border-strong);
 		border-radius: 999px;
 		background: var(--color-surface-muted, #f6f7f9);
@@ -1037,8 +1227,9 @@
 		content: attr(data-tip);
 		position: absolute;
 		z-index: 20;
-		left: 0;
+		left: 50%;
 		top: calc(100% + 0.35rem);
+		transform: translateX(-50%);
 		display: none;
 		width: min(17rem, calc(100vw - 3rem));
 		padding: 0.4rem 0.55rem;

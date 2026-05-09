@@ -24,6 +24,8 @@ Current supported workflow:
 9. Save the draft.
 10. Publish when the draft is ready for runtime/mobile use.
 
+The left palette includes a Data Dictionary area. Use it to insert reusable fields, reusable option sets, or reusable fragments. Inserted assets keep a snapshot reference so a form version remains reproducible even if the dictionary asset is changed later.
+
 ## Forms Landing Page
 
 The Forms landing page lists saved Builder definitions and imported fixture forms. It shows form status, version, section and field counts, import notes, and runtime/mobile usage.
@@ -53,8 +55,17 @@ The Builder model is the VCMS source of truth. Imported forms are only guidance 
 - labels, help text, guidance hints, notes, groups, repeat-like sections, and choice sets
 - external choice-source references for list data that should not be hard-coded
 - SNOMED CT metadata per clinical field when known
+- openEHR mapping metadata, including archetype IDs, template IDs, Web Template flat paths, Reference Model node types, and data value types
 
 Import-specific metadata may remain visible for traceability, but new Builder behavior should not depend on XLSForm terminology or storage fields.
+
+## openEHR / EHRbase Direction
+
+VCMS should use EHRbase as the clinical data repository. Builder users configure forms, dictionary assets, and openEHR mappings in VCMS. Runtime workflows should save completed clinical data to EHRbase as openEHR `COMPOSITION` records.
+
+VCMS still owns user login, privileges, local patient search, the local patient-to-`ehr_id` linkage, and UI workflow configuration. EHRbase owns clinical composition storage, template validation, versioning, and AQL query behavior.
+
+Follow-up visits should be saved as new clinical event compositions. Editing a previous composition version should be used for correcting that previous document, not for recording a later visit.
 
 ## Current Limitations
 

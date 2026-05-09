@@ -48,6 +48,44 @@ Runtime code consumes only published definitions through service contracts. Runt
 
 Builder drafts, unpublished validation experiments, and retired definitions must not leak into runtime screens unless explicitly requested by a Builder administrator in a Builder context.
 
+## openEHR / EHRbase Boundary
+
+VCMS should use EHRbase as the openEHR Clinical Data Repository. The Builder must not implement its own openEHR persistence engine, canonical Reference Model storage, Operational Template processor, validation engine, or AQL engine.
+
+The VCMS responsibility is the Svelte-openEHR bridge:
+
+- author VCMS form definitions, reusable fields, reusable fragments, and reusable option sets;
+- store mapping metadata for openEHR archetypes, templates, Web Template flat paths, Reference Model node types, and data value types;
+- produce definition payloads that can later emit flat Web Template composition data for EHRbase;
+- keep authentication, privileges, patient lookup, local workflow configuration, and runtime screen orchestration inside VCMS.
+
+The EHRbase responsibility is the clinical source of truth:
+
+- store openEHR `COMPOSITION` records and their correction/amendment versions;
+- validate submitted compositions against uploaded templates;
+- expose openEHR REST APIs and AQL query behavior;
+- support longitudinal clinical organization through openEHR structures such as folders/directories and instruction/action entries where appropriate.
+
+Patient identity remains a VCMS concern at this stage. VCMS should keep the local patient or visit identifier to `ehr_id` linkage in its own database and pass only the needed EHRbase identifiers to composition-save workflows.
+
+New clinical events, such as follow-up visits after cataract surgery, should normally create new event compositions. Composition updates should be reserved for correcting or amending the same clinical document, not for recording a later visit.
+
+Registration and workflow data should be split deliberately:
+
+- Local demographic and operational lookup data stays in VCMS/PostgreSQL, including patient search fields, phone numbers, operational PEC/camp identifiers, billing-like values, and local workflow configuration.
+- Clinical observations, evaluations, instructions, actions, and encounter documents should be saved to EHRbase through mapped templates.
+- Referral-like workflows should use VCMS UI/work queues for task orchestration while persisting the clinical intent and fulfilment as mapped openEHR instruction/action composition content where the template supports it.
+
+## Data Dictionary
+
+The Builder data dictionary is the repository of reusable clinical building blocks. It contains:
+
+- **Fields**: one clinical data point with label, field name, type, validation, input behavior, coding, and openEHR mapping.
+- **Option sets**: reusable choices with stable values, labels, coding, and optional openEHR mappings per option.
+- **Fragments**: reusable groups of fields and/or sections that can be inserted into a form together.
+
+Dictionary assets are versioned independently from forms. Form fields inserted from the dictionary should keep a `dictionaryRef` snapshot so a published form is reproducible even after the source dictionary asset changes.
+
 ## XLSForm Import Coverage for PEC Forms
 
 The current `src/lib/server/modules/xlsform-import/` implementation is fixture-driven so the four PEC XLSForm forms can be imported without the xlsx parser dependency:

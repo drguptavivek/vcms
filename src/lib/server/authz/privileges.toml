@@ -167,6 +167,12 @@ roles = ["admin", "barcode_print_manager"]
 resource = "system"
 audit = true
 
+[privileges."emr.dictionary.manage"]
+description = "Manage reusable EMR dictionary assets, drafts, and versions"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = true
+
 [privileges."emr.clinical_note.submit"]
 description = "Submit an EMR clinical note for an allocated PEC encounter"
 roles = ["admin", "barcode_print_manager"]

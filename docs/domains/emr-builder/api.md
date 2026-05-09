@@ -17,6 +17,7 @@ Implemented endpoint families:
 - `publish`: publish a draft as an immutable version.
 - `definition`: fetch definition metadata.
 - `versions`: inspect published versions.
+- `dictionary`: save, publish, retire, list, and inspect reusable field, option-set, and fragment assets.
 
 Planned endpoint families that are not implemented yet:
 
@@ -34,8 +35,14 @@ Planned endpoint families that are not implemented yet:
 | `/api/v1/emr-builder/publish`                     | `POST` | Publish the latest draft as the next immutable version. |
 | `/api/v1/emr-builder/definition?definitionId=...` | `GET`  | Fetch definition metadata.                              |
 | `/api/v1/emr-builder/versions?definitionId=...`   | `GET`  | List published versions.                                |
+| `/api/v1/emr-builder/dictionary`                  | `POST` | Save a reusable dictionary asset draft.                 |
+| `/api/v1/emr-builder/dictionary/list?...`         | `GET`  | List dictionary asset metadata.                         |
+| `/api/v1/emr-builder/dictionary/item?...`         | `GET`  | Fetch one dictionary asset metadata record.             |
+| `/api/v1/emr-builder/dictionary/versions?...`     | `GET`  | List published versions for one dictionary asset.       |
+| `/api/v1/emr-builder/dictionary/publish`          | `POST` | Publish a dictionary asset draft as immutable version.  |
+| `/api/v1/emr-builder/dictionary/retire`           | `POST` | Retire a dictionary asset.                              |
 
-All implemented Builder routes require `emr.builder.manage`. Route contract coverage lives in `src/routes/api/v1/emr-builder/emr-builder.route-contract.spec.ts`.
+Definition routes require `emr.builder.manage`. Dictionary routes require `emr.dictionary.manage`. Route contract coverage lives in `src/routes/api/v1/emr-builder/emr-builder.route-contract.spec.ts` and `src/routes/api/v1/emr-builder/emr-dictionary.route-contract.spec.ts`.
 
 ## Transport Rules
 
@@ -53,11 +60,18 @@ The draft payload is the versioned `EmrNoteDefinition` JSON model. The Builder s
 - `validation` for required messages, text length limits, numeric bounds, and patterns.
 - section-level `odk` metadata for group/repeat behavior.
 - field-level SNOMED CT metadata, including numeric concept IDs.
+- openEHR mapping metadata for archetype IDs, archetype paths, template IDs, template paths, Web Template flat paths, Reference Model node types, and data value types.
 - external choice source references for master data, terminology, clinical worklists, and future API-backed lists.
 
 Legacy/import metadata such as `xlsv1Name` and `odkBind` can be retained for provenance and compatibility, but new runtime behavior should read the Builder fields first.
 
 The server validates this payload with Zod before saving or publishing. Runtime/mobile consumers should use published render models, not draft payloads.
+
+## EHRbase Integration Contract
+
+VCMS Builder APIs do not save patient clinical data directly to VCMS tables. Runtime composition-save workflows should transform published Builder definitions and captured field values into flat Web Template composition payloads and submit them to EHRbase.
+
+VCMS should store local patient/workflow metadata and the `ehr_id` linkage needed to call EHRbase. EHRbase remains responsible for versioned `COMPOSITION` storage, template validation, and AQL query execution.
 
 ## Stable Error Expectations
 

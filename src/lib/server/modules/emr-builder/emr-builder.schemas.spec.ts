@@ -136,6 +136,72 @@ describe('emr note definition schema', () => {
 		expect(parsed.analytics.dimensions[0].key).toBe('note-type');
 	});
 
+	it('accepts openEHR composition and section/field mapping metadata', () => {
+		const parsed = parseEmrNoteDefinition({
+			...baseDefinition,
+			metadata: {
+				...baseDefinition.metadata,
+				compositionTemplateId: 'vcms-opd-composition-v1',
+				compositionArchetypeId: 'openEHR-EHR-COMPOSITION.adverse_reaction_list.v1',
+				compositionCategory: 'events',
+				compositionSetting: 'opd'
+			},
+			layout: {
+				sections: [
+					{
+						...baseDefinition.layout.sections[0],
+						openEhrMapping: {
+							archetypeId: 'openEHR-EHR-EVALUATION.visual_acuity.v1',
+							archetypePath: '/items[at0001]',
+							webTemplatePath: 'opd_register/vision',
+							archetypeStructure: 'ENTRY'
+						},
+						fields: [
+							{
+								...baseDefinition.layout.sections[0].fields[0],
+								openEhrMapping: {
+									archetypeId: 'openEHR-EHR-ELEMENT.visual_acuity.v1',
+									archetypePath: '/data[at0001]/items[at0002]',
+									webTemplatePath: 'opd_register/vision/right_eye_ucva',
+									terminologyCode: 'SNOMED-CT::247000',
+									dataValueType: 'DV_TEXT'
+								},
+								choiceSet: {
+									choices: [
+										{
+											value: '6-6',
+											label: '6/6',
+											openEhrMapping: { terminologyCode: 'SNOMED-CT::1' }
+										},
+										{
+											value: '6-9',
+											label: '6/9',
+											openEhrMapping: { terminologyCode: 'SNOMED-CT::2' }
+										}
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+		});
+
+		expect(parsed.metadata.compositionTemplateId).toBe('vcms-opd-composition-v1');
+		expect(parsed.layout.sections[0].openEhrMapping?.archetypeId).toBe(
+			'openEHR-EHR-EVALUATION.visual_acuity.v1'
+		);
+		expect(parsed.layout.sections[0].fields[0].openEhrMapping?.terminologyCode).toBe(
+			'SNOMED-CT::247000'
+		);
+		expect(parsed.layout.sections[0].fields[0].openEhrMapping?.webTemplatePath).toBe(
+			'opd_register/vision/right_eye_ucva'
+		);
+		expect(
+			parsed.layout.sections[0].fields[0].choiceSet?.choices?.[0]?.openEhrMapping?.terminologyCode
+		).toBe('SNOMED-CT::1');
+	});
+
 	it('requires choice sets only for choice fields', () => {
 		expect(() =>
 			emrNoteDefinitionSchema.parse({
@@ -189,6 +255,54 @@ describe('emr note definition schema', () => {
 		).toThrow();
 	});
 
+	it('validates openEHR mapping string formats', () => {
+		expect(() =>
+			parseEmrNoteDefinition({
+				...baseDefinition,
+				layout: {
+					sections: [
+						{
+							...baseDefinition.layout.sections[0],
+							openEhrMapping: {
+								archetypeId: 'bad-archetype-id'
+							},
+							fields: [
+								{
+									...baseDefinition.layout.sections[0].fields[0],
+									openEhrMapping: {
+										archetypePath: 'bad-path'
+									}
+								}
+							]
+						}
+					]
+				}
+			})
+		).toThrow();
+
+		expect(() =>
+			parseEmrNoteDefinition({
+				...baseDefinition,
+				layout: {
+					sections: [
+						{
+							...baseDefinition.layout.sections[0],
+							openEhrMapping: {
+								archetypeId: 'openEHR-EHR-EVALUATION.visual_acuity.v1'
+							},
+							fields: [
+								{
+									...baseDefinition.layout.sections[0].fields[0],
+									openEhrMapping: {}
+								}
+							]
+						}
+					]
+				}
+			})
+		).toThrow();
+	});
+
 	it('computes stable hashes and excludes an existing versionHash', () => {
 		const hash = computeEmrNoteDefinitionVersionHash(baseDefinition);
 		const hashWithExistingHash = computeEmrNoteDefinitionVersionHash({
@@ -198,6 +312,32 @@ describe('emr note definition schema', () => {
 
 		expect(hash).toMatch(/^sha256:[a-f0-9]{64}$/);
 		expect(hashWithExistingHash).toBe(hash);
+	});
+
+	it('includes openEHR mapping metadata in definition hashes', () => {
+		const baseHash = computeEmrNoteDefinitionVersionHash(baseDefinition);
+		const withOpenEhr = computeEmrNoteDefinitionVersionHash({
+			...baseDefinition,
+			metadata: {
+				...baseDefinition.metadata,
+				compositionArchetypeId: 'openEHR-EHR-COMPOSITION.clinical.v1'
+			},
+			layout: {
+				sections: [
+					{
+						...baseDefinition.layout.sections[0],
+						openEhrMapping: {
+							archetypeId: 'openEHR-EHR-EVALUATION.visual_acuity.v1',
+							archetypePath: '/items[at0001]',
+							archetypeStructure: 'ENTRY'
+						}
+					}
+				]
+			}
+		});
+
+		expect(withOpenEhr).toMatch(/^sha256:[a-f0-9]{64}$/);
+		expect(withOpenEhr).not.toBe(baseHash);
 	});
 
 	it('accepts optional SNOMED metadata on note fields', () => {

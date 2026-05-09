@@ -32,6 +32,16 @@ export const carePathwayStatus = pgEnum('care_pathway_status', [
 	'cancelled'
 ]);
 export const clinicalNoteStatus = pgEnum('clinical_note_status', ['draft', 'signed', 'amended']);
+export const emrDictionaryAssetKind = pgEnum('emr_dictionary_asset_kind', [
+	'field',
+	'option_set',
+	'fragment'
+]);
+export const emrDictionaryAssetStatus = pgEnum('emr_dictionary_asset_status', [
+	'draft',
+	'active',
+	'retired'
+]);
 export const emrDefinitionStatus = pgEnum('emr_definition_status', ['draft', 'active', 'retired']);
 export const clinicalWorklistStatus = pgEnum('clinical_worklist_status', [
 	'open',
@@ -450,6 +460,84 @@ export const emrNoteDefinitionVersions = pgTable(
 	]
 );
 
+export const emrDictionaryAssets = pgTable(
+	'emr_dictionary_assets',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		dictionaryId: text('dictionary_id').notNull(),
+		key: text('key').notNull(),
+		kind: emrDictionaryAssetKind('kind').notNull(),
+		title: text('title').notNull(),
+		description: text('description'),
+		specialty: text('specialty'),
+		status: emrDictionaryAssetStatus('status').notNull().default('draft'),
+		tags: jsonb('tags_json').notNull().default([]),
+		version: integer('version').notNull().default(0),
+		versionHash: text('version_hash').notNull(),
+		publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
+		publishedAt: timestamp('published_at'),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('emr_dictionary_assets_dictionary_key_kind_uidx').on(
+			table.dictionaryId,
+			table.key,
+			table.kind
+		),
+		index('emr_dictionary_assets_dictionary_idx').on(table.dictionaryId),
+		index('emr_dictionary_assets_status_kind_idx').on(table.status, table.kind),
+		check('emr_dictionary_assets_version_check', sql`${table.version} >= 0`)
+	]
+);
+
+export const emrDictionaryAssetDrafts = pgTable(
+	'emr_dictionary_asset_drafts',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		assetId: uuid('asset_id')
+			.notNull()
+			.references(() => emrDictionaryAssets.id, { onDelete: 'cascade' }),
+		payloadJson: jsonb('payload_json').notNull(),
+		versionHash: text('version_hash').notNull(),
+		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+		updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('emr_dictionary_asset_drafts_asset_id_uidx').on(table.assetId),
+		index('emr_dictionary_asset_drafts_updated_at_idx').on(table.updatedAt)
+	]
+);
+
+export const emrDictionaryAssetVersions = pgTable(
+	'emr_dictionary_asset_versions',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		assetId: uuid('asset_id')
+			.notNull()
+			.references(() => emrDictionaryAssets.id, { onDelete: 'cascade' }),
+		version: integer('version').notNull(),
+		versionHash: text('version_hash').notNull(),
+		changeType: text('change_type').notNull().default('publish'),
+		payloadJson: jsonb('payload_json').notNull(),
+		publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
+		publishedAt: timestamp('published_at').notNull().defaultNow(),
+		reason: text('reason').notNull().default('')
+	},
+	(table) => [
+		uniqueIndex('emr_dictionary_asset_versions_asset_version_uidx').on(
+			table.assetId,
+			table.version
+		),
+		index('emr_dictionary_asset_versions_asset_id_idx').on(table.assetId),
+		check('emr_dictionary_asset_versions_version_check', sql`${table.version} > 0`)
+	]
+);
+
 export const clinicalWorklists = pgTable(
 	'clinical_worklists',
 	{
@@ -532,6 +620,28 @@ export const emrNoteDefinitionVersionRelations = relations(
 		definition: one(emrNoteDefinitions, {
 			fields: [emrNoteDefinitionVersions.definitionId],
 			references: [emrNoteDefinitions.id]
+		})
+	})
+);
+
+export const emrDictionaryAssetRelations = relations(emrDictionaryAssets, ({ many }) => ({
+	drafts: many(emrDictionaryAssetDrafts),
+	versions: many(emrDictionaryAssetVersions)
+}));
+
+export const emrDictionaryAssetDraftRelations = relations(emrDictionaryAssetDrafts, ({ one }) => ({
+	asset: one(emrDictionaryAssets, {
+		fields: [emrDictionaryAssetDrafts.assetId],
+		references: [emrDictionaryAssets.id]
+	})
+}));
+
+export const emrDictionaryAssetVersionRelations = relations(
+	emrDictionaryAssetVersions,
+	({ one }) => ({
+		asset: one(emrDictionaryAssets, {
+			fields: [emrDictionaryAssetVersions.assetId],
+			references: [emrDictionaryAssets.id]
 		})
 	})
 );

@@ -9,7 +9,7 @@ last_reviewed: 2026-05-09
 
 ## Scope
 
-This document focuses on test strategy and scaffolding for the future **EMR Builder drag/drop editor**, not backend behavior.
+This document focuses on test strategy and scaffolding for the **EMR Builder editor**, dictionary repository, and openEHR mapping model.
 
 ## Business Logic Tests
 
@@ -23,6 +23,8 @@ Use TDD for Builder definition rules. Cover:
 - publish eligibility
 - published-version immutability
 - retirement rules
+- dictionary asset version hashing
+- openEHR mapping validation for definitions, fields, options, sections, and fragments
 
 ## Database Tests
 
@@ -32,6 +34,7 @@ Use PostgreSQL-backed tests for:
 - published definition locking
 - runtime reference protection
 - draft-to-published transitions
+- dictionary draft-to-published transitions
 - concurrent publish attempts
 
 ## Drag/Drop UI Test Strategy (Builder UI)
@@ -76,6 +79,8 @@ Recommended test targets in `tests/components/emr-builder/`:
 ## Route Tests
 
 Builder route tests must prove validation, authentication, AuthZ, rate limits, safe errors, request IDs, and audit side effects.
+
+Dictionary route tests must additionally prove that field, option-set, and fragment assets stay behind `emr.dictionary.manage`, use mutation limits for save/publish/retire, and never copy full clinical payloads into audit logs.
 
 ## Playwright Drag Interaction Guidance
 

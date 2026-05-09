@@ -96,6 +96,14 @@ npm run dev
 
 The repository includes `compose.yaml` for local PostgreSQL.
 
+The same compose file also starts a local EHRbase openEHR CDR and its dedicated PostgreSQL database. EHRbase is available at:
+
+```text
+http://localhost:8080/ehrbase/rest/openehr/v1
+```
+
+The local EHRbase credentials are defined in `.env` through `EHRBASE_AUTH_USER`, `EHRBASE_AUTH_PASSWORD`, `EHRBASE_ADMIN_USER`, and `EHRBASE_ADMIN_PASSWORD`. Keep the EHRbase database separate from the VCMS application database.
+
 Open `http://localhost:5173` and sign in with the local development account:
 
 ```text

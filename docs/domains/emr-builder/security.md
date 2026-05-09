@@ -18,9 +18,11 @@ Every Builder mutation needs a named privilege in `src/lib/server/authz/privileg
 Builder actions requiring audit logs include:
 
 - definition draft create or update
+- dictionary asset draft create or update
 - field or section structural change
 - validation rule change
 - pathway graph change
+- dictionary asset publish or retire
 - publish
 - retire
 - rollback or supersede
@@ -42,13 +44,19 @@ Builder reads can use standard authenticated read limits. Draft mutation, publis
 
 Reviewed on 2026-05-09 after the Builder API, XLSForm parity model, renderer, and Svelte Builder UI work.
 
-| Route                            | Method | Privilege            | Rate limit | Validation                                    | Audit behavior                                 |
-| -------------------------------- | ------ | -------------------- | ---------- | --------------------------------------------- | ---------------------------------------------- |
-| `/api/v1/emr-builder/draft`      | `GET`  | `emr.builder.manage` | read       | `emrBuilderDefinitionQuerySchema` query parse | failure audit from API wrapper                 |
-| `/api/v1/emr-builder/draft`      | `POST` | `emr.builder.manage` | mutation   | `emrBuilderSaveDraftSchema`                   | explicit `save_draft` audit after service save |
-| `/api/v1/emr-builder/publish`    | `POST` | `emr.builder.manage` | mutation   | `emrBuilderPublishDraftSchema`                | explicit publish audit after service publish   |
-| `/api/v1/emr-builder/definition` | `GET`  | `emr.builder.manage` | read       | `emrBuilderDefinitionQuerySchema` query parse | failure audit from API wrapper                 |
-| `/api/v1/emr-builder/versions`   | `GET`  | `emr.builder.manage` | read       | `emrBuilderDefinitionQuerySchema` query parse | failure audit from API wrapper                 |
+| Route                                     | Method | Privilege               | Rate limit | Validation                                     | Audit behavior                                       |
+| ----------------------------------------- | ------ | ----------------------- | ---------- | ---------------------------------------------- | ---------------------------------------------------- |
+| `/api/v1/emr-builder/draft`               | `GET`  | `emr.builder.manage`    | read       | `emrBuilderDefinitionQuerySchema` query parse  | failure audit from API wrapper                       |
+| `/api/v1/emr-builder/draft`               | `POST` | `emr.builder.manage`    | mutation   | `emrBuilderSaveDraftSchema`                    | explicit `save_draft` audit after service save       |
+| `/api/v1/emr-builder/publish`             | `POST` | `emr.builder.manage`    | mutation   | `emrBuilderPublishDraftSchema`                 | explicit publish audit after service publish         |
+| `/api/v1/emr-builder/definition`          | `GET`  | `emr.builder.manage`    | read       | `emrBuilderDefinitionQuerySchema` query parse  | failure audit from API wrapper                       |
+| `/api/v1/emr-builder/versions`            | `GET`  | `emr.builder.manage`    | read       | `emrBuilderDefinitionQuerySchema` query parse  | failure audit from API wrapper                       |
+| `/api/v1/emr-builder/dictionary`          | `POST` | `emr.dictionary.manage` | mutation   | `emrDictionarySaveDraftSchema`                 | explicit dictionary save audit after service save    |
+| `/api/v1/emr-builder/dictionary/list`     | `GET`  | `emr.dictionary.manage` | read       | `emrDictionaryListQuerySchema` query parse     | failure audit from API wrapper                       |
+| `/api/v1/emr-builder/dictionary/item`     | `GET`  | `emr.dictionary.manage` | read       | `emrDictionaryAssetIdentitySchema` query parse | failure audit from API wrapper                       |
+| `/api/v1/emr-builder/dictionary/versions` | `GET`  | `emr.dictionary.manage` | read       | `emrDictionaryAssetIdentitySchema` query parse | failure audit from API wrapper                       |
+| `/api/v1/emr-builder/dictionary/publish`  | `POST` | `emr.dictionary.manage` | mutation   | `emrDictionaryPublishDraftSchema`              | explicit dictionary publish audit after service save |
+| `/api/v1/emr-builder/dictionary/retire`   | `POST` | `emr.dictionary.manage` | mutation   | `emrDictionaryRetireSchema`                    | explicit dictionary retire audit after service save  |
 
 The route contract is pinned by `src/routes/api/v1/emr-builder/emr-builder.route-contract.spec.ts`.
 
@@ -56,5 +64,7 @@ The route contract is pinned by `src/routes/api/v1/emr-builder/emr-builder.route
 
 - Builder management remains an administrative privilege (`emr.builder.manage`) rather than a runtime clinician privilege.
 - Save and publish routes audit metadata only: definition IDs, version numbers, hashes, and status. Full clinical definition payloads should not be copied into audit rows.
+- Dictionary save, publish, and retire routes audit metadata only: dictionary ID, key, kind, version, hash, and status. Full reusable clinical payloads should not be copied into audit rows.
 - Published definitions are immutable version records. Runtime and mobile consumers receive active published models through runtime mobile-definition routes, not Builder draft routes.
-- XLSForm import parity data can include labels, choice names, constraints, relevance logic, and SNOMED metadata. Importers and UI previews must treat those as clinical configuration data and keep them behind Builder privileges until published.
+- Imported starter data can include labels, choice names, constraints, relevance logic, SNOMED CT metadata, and openEHR mappings. Importers and UI previews must treat those as clinical configuration data and keep them behind Builder privileges until published.
+- EHRbase is the clinical data repository. VCMS must not duplicate clinical composition payloads into local audit logs or local workflow tables beyond identifiers, hashes, and operational status needed for traceability.

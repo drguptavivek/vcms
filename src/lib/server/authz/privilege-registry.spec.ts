@@ -28,6 +28,14 @@ describe('privilege registry', () => {
 		});
 	});
 
+	it('loads EMR dictionary management privilege', () => {
+		expect(getPrivilege('emr.dictionary.manage')).toMatchObject({
+			resource: 'system',
+			audit: true,
+			roles: expect.arrayContaining(['admin'])
+		});
+	});
+
 	it('loads mobile EMR runtime definition privilege', () => {
 		expect(getPrivilege('emr.runtime.mobile_definition.view')).toMatchObject({
 			resource: 'system',
