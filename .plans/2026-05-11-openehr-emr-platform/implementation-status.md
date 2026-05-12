@@ -4,7 +4,7 @@ status: draft
 owner: engineering
 last_reviewed: 2026-05-12
 plan_date: 2026-05-11
-implementation_status: curated_aql_query_slice
+implementation_status: emr_builder_audit_durability_slice
 portable: true
 ---
 
@@ -13,6 +13,8 @@ portable: true
 ## Current State
 
 The plan has been drafted from the openEHR architecture review and the current VCMS EMR Builder direction. The first reusable runtime EHRbase bridge slice is now implemented and live-smoke-tested locally. A first Template Registry API slice now exposes local template listing, OPT upload/sync, and Web Template-derived runtime manifests. A first admin UI slice now gives privileged Builder users a reusable openEHR Template Registry screen for OPT upload, CDR sync, registered template review, and runtime manifest inspection. A first curated AQL service slice now exposes governed Composition lookup queries without exposing arbitrary AQL.
+
+The EMR Builder draft-save and publish mutations now write their success audit records inside the service-owned repository transaction. Audit persistence failures reject the mutation instead of being caught and logged after the write.
 
 EHRbase has been added to the local Docker Compose setup and brought up successfully. The local EHRbase API is reachable at:
 
@@ -61,6 +63,7 @@ The current VCMS EMR Builder is still a form-oriented editor and must evolve int
   - `GET /api/v1/openehr/aql/queries`
   - `POST /api/v1/openehr/aql/queries/execute`
 - New `emr.aql.query` privilege added for governed clinical CDR query execution.
+- EMR Builder definition draft save and publish now have fail-closed transactional success-audit behavior.
 - Local seed now creates two password-backed users:
   - `admin@example.test / ChangeMe123!`
   - `emr.tester@example.test / ChangeMe123!`

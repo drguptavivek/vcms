@@ -1,5 +1,6 @@
 import { computeEmrNoteDefinitionVersionHash, parseEmrNoteDefinition } from './emr-builder.schemas';
 import { conflict, notFound } from '$lib/server/observability/errors';
+import type { AuditInput } from '$lib/server/observability/audit';
 import { EmrBuilderRepository } from './emr-builder.repository';
 import type { EmrRenderModel } from '../emr-renderer/emr-renderer.types';
 import { EmrRendererService } from '../emr-renderer/emr-renderer.service';
@@ -8,12 +9,14 @@ import type { EmrNoteDefinitionRecord, EmrNoteDefinitionVersionRecord } from './
 type SaveDraftInput = {
 	definition: unknown;
 	userId?: string;
+	audit?: Pick<AuditInput, 'requestId' | 'ipAddress' | 'userAgent'>;
 };
 
 type PublishInput = {
 	definitionId: string;
 	userId: string;
 	reason?: string;
+	audit?: Pick<AuditInput, 'requestId' | 'ipAddress' | 'userAgent'>;
 };
 
 type MetadataSnapshot = ReturnType<typeof parseEmrNoteDefinition>;
@@ -81,84 +84,139 @@ export class EmrBuilderService {
 		const parsed = parseEmrNoteDefinition(input.definition);
 		const versionHash = computeEmrNoteDefinitionVersionHash(parsed);
 
-		const existingDefinition = await this.repository.findDefinitionByDefinitionId(
-			parsed.metadata.definitionId
-		);
-		const definition = await this.repository.upsertDefinition(
-			this.buildDefinitionRecord(parsed, versionHash, input.userId, existingDefinition)
-		);
+		return this.withTransaction(async (repository) => {
+			const existingDefinition = await repository.findDefinitionByDefinitionId(
+				parsed.metadata.definitionId
+			);
+			const definition = await repository.upsertDefinition(
+				this.buildDefinitionRecord(parsed, versionHash, input.userId, existingDefinition)
+			);
 
-		const existingDraft = await this.repository.findDraftByDefinitionId(definition.id);
-		const draft = await this.repository.upsertDraft(definition.id, {
-			payloadJson: parsed,
-			versionHash,
-			createdBy: input.userId,
-			updatedBy: input.userId
+			const existingDraft = await repository.findDraftByDefinitionId(definition.id);
+			const draft = await repository.upsertDraft(definition.id, {
+				payloadJson: parsed,
+				versionHash,
+				createdBy: input.userId,
+				updatedBy: input.userId
+			});
+
+			const result = {
+				definition,
+				draft,
+				versionHash,
+				createdDraftVersion: !existingDraft
+			};
+
+			if (input.audit) {
+				await repository.writeAudit({
+					requestId: input.audit.requestId,
+					actorUserId: input.userId,
+					action: 'emr.builder.manage',
+					resourceType: 'emr_definition',
+					resourceId: definition.id,
+					reason: 'save_draft',
+					before: {
+						definitionId: parsed.metadata.definitionId,
+						existingVersion: existingDefinition?.version ?? 0,
+						existingDraftHash: existingDraft?.versionHash ?? null
+					},
+					after: {
+						definitionId: definition.definitionId,
+						definitionVersion: definition.version,
+						draftVersionHash: versionHash,
+						createdDraftVersion: result.createdDraftVersion
+					},
+					ipAddress: input.audit.ipAddress,
+					userAgent: input.audit.userAgent
+				});
+			}
+
+			return result;
 		});
-
-		return {
-			definition,
-			draft,
-			versionHash,
-			createdDraftVersion: !existingDraft
-		};
 	}
 
 	async publishDraft(input: PublishInput): Promise<EmrBuilderPublishResult> {
-		const definition = await this.repository.findDefinitionByDefinitionId(input.definitionId);
-		if (!definition) {
-			throw notFound('Definition not found.');
-		}
+		return this.withTransaction(async (repository) => {
+			const definition = await repository.findDefinitionByDefinitionId(input.definitionId);
+			if (!definition) {
+				throw notFound('Definition not found.');
+			}
 
-		const draft = await this.repository.findDraftByDefinitionId(definition.id);
-		if (!draft) {
-			throw conflict('No draft exists for this definition.');
-		}
+			const draft = await repository.findDraftByDefinitionId(definition.id);
+			if (!draft) {
+				throw conflict('No draft exists for this definition.');
+			}
 
-		if (definition.versionHash === draft.versionHash && definition.version > 0) {
-			throw conflict('No changes detected for publish.', {
-				definitionId: input.definitionId,
-				version: definition.version
+			if (definition.versionHash === draft.versionHash && definition.version > 0) {
+				throw conflict('No changes detected for publish.', {
+					definitionId: input.definitionId,
+					version: definition.version
+				});
+			}
+
+			const parsed = parseEmrNoteDefinition(draft.payloadJson);
+			const nextVersion = definition.version + 1;
+
+			if (await repository.findVersionByDefinitionIdAndVersion(definition.id, nextVersion)) {
+				throw conflict('Version already exists for this definition.', {
+					definitionId: input.definitionId,
+					version: nextVersion
+				});
+			}
+
+			const version = await repository.createVersion({
+				definitionId: definition.id,
+				version: nextVersion,
+				versionHash: draft.versionHash,
+				changeType: 'publish',
+				payloadJson: parsed,
+				publishedBy: input.userId,
+				reason: input.reason ?? ''
 			});
-		}
 
-		const parsed = parseEmrNoteDefinition(draft.payloadJson);
-		const nextVersion = definition.version + 1;
-
-		if (await this.repository.findVersionByDefinitionIdAndVersion(definition.id, nextVersion)) {
-			throw conflict('Version already exists for this definition.', {
-				definitionId: input.definitionId,
-				version: nextVersion
+			const updatedDefinition = await repository.applyDefinitionVersionUpdate(definition.id, {
+				version: nextVersion,
+				versionHash: draft.versionHash,
+				status: 'active',
+				updatedBy: input.userId
 			});
-		}
 
-		const version = await this.repository.createVersion({
-			definitionId: definition.id,
-			version: nextVersion,
-			versionHash: draft.versionHash,
-			changeType: 'publish',
-			payloadJson: parsed,
-			publishedBy: input.userId,
-			reason: input.reason ?? ''
+			if (!updatedDefinition) {
+				throw notFound('Definition not found during publish update.');
+			}
+
+			await repository.deleteDraft(definition.id);
+
+			const result = {
+				definition: updatedDefinition,
+				version
+			};
+
+			if (input.audit) {
+				await repository.writeAudit({
+					requestId: input.audit.requestId,
+					actorUserId: input.userId,
+					action: 'emr.builder.manage',
+					resourceType: 'emr_definition',
+					resourceId: updatedDefinition.id,
+					reason: input.reason ?? 'publish_draft',
+					before: {
+						definitionId: input.definitionId,
+						previousVersion: definition.version,
+						publishedVersion: version.version
+					},
+					after: {
+						definitionId: updatedDefinition.definitionId,
+						version: updatedDefinition.version,
+						status: updatedDefinition.status
+					},
+					ipAddress: input.audit.ipAddress,
+					userAgent: input.audit.userAgent
+				});
+			}
+
+			return result;
 		});
-
-		const updatedDefinition = await this.repository.applyDefinitionVersionUpdate(definition.id, {
-			version: nextVersion,
-			versionHash: draft.versionHash,
-			status: 'active',
-			updatedBy: input.userId
-		});
-
-		if (!updatedDefinition) {
-			throw notFound('Definition not found during publish update.');
-		}
-
-		await this.repository.deleteDraft(definition.id);
-
-		return {
-			definition: updatedDefinition,
-			version
-		};
 	}
 
 	listVersions(definitionId: string) {
@@ -271,6 +329,14 @@ export class EmrBuilderService {
 			createdBy: existingDefinition?.createdBy ?? userId,
 			updatedBy: userId
 		};
+	}
+
+	private withTransaction<T>(operation: (repository: EmrBuilderRepository) => Promise<T>) {
+		const repository = this.repository as EmrBuilderRepository & {
+			transaction?: (callback: (repository: EmrBuilderRepository) => Promise<T>) => Promise<T>;
+		};
+
+		return repository.transaction ? repository.transaction(operation) : operation(this.repository);
 	}
 
 	private buildCacheMetadata(input: {

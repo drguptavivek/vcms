@@ -1,9 +1,6 @@
 import type { RequestHandler } from './$types';
 import { withApiHandler } from '$lib/server/api/handler';
 import { rateLimitPolicies } from '$lib/server/api/rate-limit';
-import { db } from '$lib/server/db';
-import { logger } from '$lib/server/observability/logger';
-import { writeAudit } from '$lib/server/observability/audit';
 import { validationFailed } from '$lib/server/observability/errors';
 import {
 	emrBuilderDefinitionQuerySchema,
@@ -33,36 +30,13 @@ export const POST: RequestHandler = (event) =>
 		resource: (body) => ({ type: 'emr_definition', id: body.definition.metadata.definitionId }),
 		rateLimit: rateLimitPolicies.mutation,
 		handler: ({ body, userId, requestId, event }) =>
-			emrBuilderService
-				.saveDraft({
-					definition: body.definition,
-					userId
-				})
-				.then(async (result) => {
-					await writeAudit(db, {
-						requestId,
-						actorUserId: userId,
-						action: 'emr.builder.manage',
-						resourceType: 'emr_definition',
-						resourceId: result.definition.id,
-						reason: 'save_draft',
-						before: {
-							definitionId: body.definition.metadata.definitionId,
-							existingVersion: result.definition.version,
-							existingDraftHash: result.draft.versionHash
-						},
-						after: {
-							definitionId: result.definition.definitionId,
-							definitionVersion: result.definition.version,
-							draftVersionHash: result.versionHash,
-							createdDraftVersion: result.createdDraftVersion
-						},
-						ipAddress: event.locals.clientIp,
-						userAgent: event.request.headers.get('user-agent') ?? undefined
-					}).catch((error) => {
-						logger.error({ requestId, err: error }, 'failed to write emr draft audit log');
-					});
-
-					return result;
-				})
+			emrBuilderService.saveDraft({
+				definition: body.definition,
+				userId,
+				audit: {
+					requestId,
+					ipAddress: event.locals.clientIp,
+					userAgent: event.request.headers.get('user-agent') ?? undefined
+				}
+			})
 	});

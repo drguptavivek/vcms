@@ -5,6 +5,7 @@ import {
 	emrNoteDefinitionDrafts,
 	emrNoteDefinitionVersions
 } from '$lib/server/db/schema';
+import { writeAudit, type AuditInput } from '$lib/server/observability/audit';
 import type {
 	EmrNoteDefinitionDraftRecord,
 	EmrNoteDefinitionRecord,
@@ -18,6 +19,16 @@ type Database = typeof db;
 
 export class EmrBuilderRepository {
 	constructor(private readonly database: Database = db) {}
+
+	transaction<T>(operation: (repository: EmrBuilderRepository) => Promise<T>) {
+		return this.database.transaction((tx) =>
+			operation(new EmrBuilderRepository(tx as unknown as Database))
+		);
+	}
+
+	writeAudit(input: AuditInput) {
+		return writeAudit(this.database, input);
+	}
 
 	findDefinitionByDefinitionId(definitionId: string) {
 		return this.database

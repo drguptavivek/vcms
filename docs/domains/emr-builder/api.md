@@ -2,7 +2,7 @@
 title: EMR Builder API Blueprint
 status: draft
 owner: engineering
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-12
 ---
 
 # EMR Builder API Blueprint
@@ -57,6 +57,8 @@ Those routes require `terminology.view` and are documented in `../terminology/ap
 Routes transport data only. Business rules belong in `emr-builder.service.ts`, validation belongs in shared Zod schemas, and persistence belongs in `emr-builder.repository.ts`.
 
 Every Builder route must use shared API helpers, request ID propagation, Zod validation, AuthZ, rate limiting, safe error responses, and structured logging.
+
+Definition draft save and publish routes pass request audit context into `emr-builder.service.ts`. The service writes the success audit record in the same repository transaction as the mutation. If audit persistence fails, the mutation must fail rather than silently succeeding without durable audit evidence.
 
 ## Definition Payload Contract
 

@@ -29,20 +29,39 @@ describe('EMR builder route contracts', () => {
 		}
 	});
 
-	it('uses mutation schemas, mutation rate limits, resource binding, and audit logs for mutations', () => {
+	it('uses mutation schemas, mutation rate limits, resource binding, and service audit context for mutations', () => {
 		const draft = readRoute('draft');
 		const publish = readRoute('publish');
 
 		expect(draft).toContain('schema: emrBuilderSaveDraftSchema');
 		expect(draft).toContain('resource: (body) => ({ type:');
 		expect(draft).toContain('rateLimit: rateLimitPolicies.mutation');
-		expect(draft).toContain('writeAudit');
-		expect(draft).toContain("reason: 'save_draft'");
+		expect(draft).toContain('emrBuilderService.saveDraft');
+		expect(draft).toContain('audit: {');
+		expect(draft).toContain('requestId');
+		expect(draft).toContain('ipAddress: event.locals.clientIp');
+		expect(draft).toContain("userAgent: event.request.headers.get('user-agent') ?? undefined");
 
 		expect(publish).toContain('schema: emrBuilderPublishDraftSchema');
 		expect(publish).toContain('resource: (body) => ({ type:');
 		expect(publish).toContain('rateLimit: rateLimitPolicies.mutation');
-		expect(publish).toContain('writeAudit');
-		expect(publish).toContain("reason: body.reason ?? 'publish_draft'");
+		expect(publish).toContain('emrBuilderService.publishDraft');
+		expect(publish).toContain('audit: {');
+		expect(publish).toContain('requestId');
+		expect(publish).toContain('ipAddress: event.locals.clientIp');
+		expect(publish).toContain("userAgent: event.request.headers.get('user-agent') ?? undefined");
+	});
+
+	it('keeps mutation success audit out of route-level catch-and-log behavior', () => {
+		const draft = readRoute('draft');
+		const publish = readRoute('publish');
+
+		expect(draft).not.toContain('writeAudit');
+		expect(draft).not.toContain('failed to write emr');
+		expect(draft).not.toContain('.catch((error)');
+
+		expect(publish).not.toContain('writeAudit');
+		expect(publish).not.toContain('failed to write emr');
+		expect(publish).not.toContain('.catch((error)');
 	});
 });

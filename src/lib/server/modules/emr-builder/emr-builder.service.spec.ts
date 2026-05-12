@@ -86,6 +86,63 @@ describe('EmrBuilderService', () => {
 		});
 	});
 
+	it('fails draft save when the transactional audit record cannot be written', async () => {
+		const definitionPayload = baseDefinition();
+		const versionHash = computeEmrNoteDefinitionVersionHash(definitionPayload);
+		const txRepository = {
+			findDefinitionByDefinitionId: vi.fn(async () => undefined),
+			findDraftByDefinitionId: vi.fn(async () => undefined),
+			upsertDefinition: vi.fn(async (input) => ({
+				id: 'definition-1',
+				createdBy: 'user-1',
+				updatedBy: 'user-1',
+				...input
+			})),
+			upsertDraft: vi.fn(async () => ({
+				id: 'draft-1',
+				definitionId: 'definition-1',
+				versionHash,
+				payloadJson: definitionPayload
+			})),
+			writeAudit: vi.fn(async () => {
+				throw new Error('audit store unavailable');
+			})
+		};
+		const repository = {
+			transaction: vi.fn(async (operation: (repository: typeof txRepository) => Promise<unknown>) =>
+				operation(txRepository)
+			)
+		};
+
+		const service = new EmrBuilderService(repository as never);
+
+		await expect(
+			service.saveDraft({
+				definition: definitionPayload,
+				userId: 'user-1',
+				audit: {
+					requestId: 'request-1',
+					ipAddress: '127.0.0.1',
+					userAgent: 'vitest'
+				}
+			})
+		).rejects.toThrow('audit store unavailable');
+
+		expect(repository.transaction).toHaveBeenCalled();
+		expect(txRepository.writeAudit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requestId: 'request-1',
+				actorUserId: 'user-1',
+				action: 'emr.builder.manage',
+				resourceType: 'emr_definition',
+				resourceId: 'definition-1',
+				reason: 'save_draft',
+				ipAddress: '127.0.0.1',
+				userAgent: 'vitest'
+			})
+		);
+	});
+
 	it('reuses an existing draft when hashes are unchanged', async () => {
 		const definitionPayload = baseDefinition();
 		const versionHash = computeEmrNoteDefinitionVersionHash(definitionPayload);
@@ -185,6 +242,81 @@ describe('EmrBuilderService', () => {
 		expect(result.version).toMatchObject(createdVersion);
 		expect(result.definition.version).toBe(3);
 		expect(result.definition.status).toBe('active');
+	});
+
+	it('fails publish when the transactional audit record cannot be written', async () => {
+		const definitionPayload = baseDefinition();
+		const draftHash = computeEmrNoteDefinitionVersionHash(definitionPayload);
+		const definition = {
+			id: 'definition-1',
+			definitionId: 'opd-eye-note',
+			status: 'draft',
+			version: 2,
+			versionHash: 'sha256:' + 'a'.repeat(64)
+		} as const;
+		const draft = {
+			id: 'draft-1',
+			definitionId: 'definition-1',
+			payloadJson: definitionPayload,
+			versionHash: draftHash
+		} as const;
+		const createdVersion = {
+			id: 'version-1',
+			definitionId: 'definition-1',
+			version: 3,
+			versionHash: draftHash,
+			payloadJson: definitionPayload
+		} as const;
+		const txRepository = {
+			findDefinitionByDefinitionId: vi.fn(async () => definition),
+			findDraftByDefinitionId: vi.fn(async () => draft),
+			findVersionByDefinitionIdAndVersion: vi.fn(async () => undefined),
+			createVersion: vi.fn(async () => createdVersion),
+			applyDefinitionVersionUpdate: vi.fn(async () => ({
+				...definition,
+				version: 3,
+				status: 'active',
+				versionHash: draftHash
+			})),
+			deleteDraft: vi.fn(async () => draft),
+			writeAudit: vi.fn(async () => {
+				throw new Error('audit store unavailable');
+			})
+		};
+		const repository = {
+			transaction: vi.fn(async (operation: (repository: typeof txRepository) => Promise<unknown>) =>
+				operation(txRepository)
+			)
+		};
+
+		const service = new EmrBuilderService(repository as never);
+
+		await expect(
+			service.publishDraft({
+				definitionId: 'opd-eye-note',
+				userId: 'user-1',
+				reason: 'initial publish',
+				audit: {
+					requestId: 'request-1',
+					ipAddress: '127.0.0.1',
+					userAgent: 'vitest'
+				}
+			})
+		).rejects.toThrow('audit store unavailable');
+
+		expect(repository.transaction).toHaveBeenCalled();
+		expect(txRepository.writeAudit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requestId: 'request-1',
+				actorUserId: 'user-1',
+				action: 'emr.builder.manage',
+				resourceType: 'emr_definition',
+				resourceId: 'definition-1',
+				reason: 'initial publish',
+				ipAddress: '127.0.0.1',
+				userAgent: 'vitest'
+			})
+		);
 	});
 
 	it('rejects publish when the draft is unchanged from the latest active version', async () => {
