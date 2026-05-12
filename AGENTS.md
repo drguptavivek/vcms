@@ -35,21 +35,23 @@ src/lib/server/modules/<feature>/
 
 ## Workflow
 
-- Delegtae to focused Spark or 5.4-mini subagents for planned bounded implementation when practical.
+- Delegate to focused Spark or 5.4-mini subagents for planned bounded implementation when practical.
+- Delegate quality gates to Spark or 5.4-mini subagents. This includes `npm run check`, `npx prettier` checks, unit tests, Playwright tests, `npm run build`, and Svelte autofixer/check loops.
+- Reuse existing Spark or 5.4-mini subagents when the subagent limit is reached. Keep one subagent slot free for fallback/debugging when practical.
 - Use a security-audit subagent for new/changed routes before commit.
 - Use a documentation subagent for new/changed routes, workflows, and privilege-sensitive features.
 - Review subagent output before considering work complete.
 - Do not commit unless the user asks.
-- never send code text to svelte.svelte-autofixer., always send a svelte / ts file
-- Always run svelte.svelte-autofixer by focused Spark subagents or 5.4-mini subagent .
+- Never send raw pasted code text to `svelte.svelte-autofixer`; always use the complete changed Svelte/TypeScript file context.
+- Always run `svelte.svelte-autofixer` through focused Spark or 5.4-mini subagents.
 
 ## SvelteKit
 
-- Use project Svelte MCP when available. - call via spark subagents
-- delegate svelte.svelte-autofixer to a spark subagent
+- Use project Svelte MCP when available through Spark or 5.4-mini subagents.
+- Delegate `svelte.svelte-autofixer` to a Spark or 5.4-mini subagent.
 - For Svelte tasks: `list-sections`, then relevant `get-documentation`.
-- Run `svelte-autofixer` after Svelte edits until clean , call via spark subagents
-- Run `svelte-autofixer` on every changed `.svelte` file in full. - call via spark subagents
+- Run `svelte-autofixer` after Svelte edits until clean through Spark or 5.4-mini subagents.
+- Run `svelte-autofixer` on every changed `.svelte` file in full through Spark or 5.4-mini subagents.
 - Use file-based routing and route groups like `(auth)` and `(app)`.
 - Use `+layout.server.ts` for group auth/app-shell data.
 - Use `+page.server.ts` for page data.
@@ -90,6 +92,7 @@ src/lib/server/modules/<feature>/
 - Use Playwright only for critical E2E smoke.
 - Use real PostgreSQL for DB behavior tests.
 - Track meaningful V8 branch coverage.
+- Test execution and reporting must be delegated to Spark or 5.4-mini subagents when those agents are available.
 
 ## Docs
 
@@ -107,6 +110,7 @@ src/lib/server/modules/<feature>/
 - Never expose raw SQL errors.
 - Keep API errors stable and safe.
 - Do not commit secrets, `.env`, local dumps, or generated build artifacts.
+- `npm run check`, Prettier checks, tests, build, Svelte autofixer, and Svelte MCP validation must be run by Spark or 5.4-mini subagents. The coordinator reviews the subagent output before commit/push.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 
@@ -136,7 +140,7 @@ bd close <id>         # Complete work
 **MANDATORY WORKFLOW:**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
+2. **Run quality gates** (if code changed) - Tests, linters, builds, and Svelte autofixer/check loops through Spark or 5.4-mini subagents
 3. **Update issue status** - Close finished work, update in-progress items
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash

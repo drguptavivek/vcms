@@ -2,7 +2,7 @@
 title: Security
 status: draft
 owner: engineering
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-12
 ---
 
 # Security
@@ -80,3 +80,17 @@ Each implementation subagent must:
 - report files changed
 - report tests added and run
 - report assumptions and remaining risks
+
+## Quality Gate Delegation
+
+Quality gates must be run by Spark or 5.4-mini subagents when those agents are available. This includes:
+
+- `npm run check`
+- `npx prettier` checks
+- unit tests
+- Playwright tests
+- `npm run build`
+- Svelte MCP documentation lookup
+- Svelte autofixer/check loops
+
+The coordinator reviews the subagent output before commit and push. If the subagent limit is reached, reuse an existing Spark or 5.4-mini subagent.

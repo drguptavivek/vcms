@@ -2,7 +2,7 @@
 title: Architecture
 status: draft
 owner: engineering
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-12
 ---
 
 # Architecture
@@ -76,3 +76,5 @@ Do not bypass service/repository boundaries from `+page.server.ts`, `+server.ts`
 - Each implementation subagent must own a bounded area and follow TDD.
 - A separate Spark security-audit subagent must audit route security before commit.
 - A separate documentation subagent must update route, workflow, and privilege documentation before commit.
+- `npm run check`, Prettier checks, unit tests, Playwright tests, `npm run build`, Svelte MCP documentation lookup, and Svelte autofixer/check loops must be delegated to Spark or 5.4-mini subagents when available.
+- Reuse existing Spark or 5.4-mini subagents when the subagent limit is reached, and keep one slot free for fallback/debugging when practical.
