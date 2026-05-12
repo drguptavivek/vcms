@@ -18,6 +18,7 @@ Implemented endpoint families:
 - `care-pathways`: runtime pathway creation and listing by patient identifier.
 - `clinical-notes/pec-opd`: PEC OPD note submission to EHRbase as an openEHR Composition, local reference/version tracking, and pathway/worklist side effects.
 - `openehr/templates`: reusable openEHR Template Registry, OPT upload/sync, cached Web Template manifest generation.
+- `openehr/aql/queries`: governed curated AQL query registry and execution.
 - `mobile/emr-definitions`: published definition manifest and rendered definition model for offline clients.
 - `mobile/clinical-notes`: idempotent mobile PEC OPD submission.
 
@@ -38,6 +39,8 @@ Implemented endpoint families:
 | `/api/v1/openehr/templates`                         | `POST` | Upload an ADL 1.4 OPT to EHRbase and cache its Web Template.          |
 | `/api/v1/openehr/templates/sync`                    | `POST` | Sync an existing CDR template and refresh its local Web Template.     |
 | `/api/v1/openehr/templates/manifest?templateId=...` | `GET`  | Build a runtime form manifest from the cached Web Template.           |
+| `/api/v1/openehr/aql/queries`                       | `GET`  | List registered curated AQL queries.                                  |
+| `/api/v1/openehr/aql/queries/execute`               | `POST` | Execute one registered AQL query with validated parameters.           |
 | `/api/v1/mobile/emr-definitions`                    | `GET`  | List active published definitions for mobile sync.                    |
 | `/api/v1/mobile/emr-definitions/{definitionId}`     | `GET`  | Fetch rendered model for one active published definition.             |
 | `/api/v1/mobile/clinical-notes`                     | `POST` | Submit mobile PEC OPD note with idempotency key.                      |
@@ -127,6 +130,31 @@ The route refreshes local metadata and cached Web Template JSON for a template a
 - local option lists and terminology metadata when present in the Web Template.
 
 All Template Registry endpoints require `emr.template.manage`. Read endpoints use the read rate-limit policy. Upload and sync use the mutation rate-limit policy and write audit records.
+
+## Curated AQL Query Contract
+
+The application must not expose arbitrary AQL execution through public API routes. AQL access is through named, curated query definitions only.
+
+`GET /api/v1/openehr/aql/queries` returns registered query metadata without exposing raw AQL text. Current query IDs:
+
+- `composition.list_by_ehr`
+- `composition.list_by_template`
+- `composition.get_by_uid`
+
+`POST /api/v1/openehr/aql/queries/execute` accepts:
+
+- `queryId`: registered curated query ID.
+- `parameters`: object containing only the parameters declared by that query.
+- `offset`: optional non-negative integer.
+- `fetch`: optional positive integer capped by the query definition.
+
+The service validates identifiers before calling EHRbase:
+
+- `ehrId` must be an openEHR EHR UUID.
+- `templateId` must match the local template identifier character policy.
+- `compositionUid` must match the EHRbase/openEHR UID character policy.
+
+All curated AQL routes require `emr.aql.query`. Execution uses the read rate-limit policy but writes an audit record because it reads clinical CDR data.
 
 ## Stable Error Expectations
 

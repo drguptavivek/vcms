@@ -4,7 +4,7 @@ status: draft
 owner: engineering
 last_reviewed: 2026-05-12
 plan_date: 2026-05-11
-implementation_status: template_registry_admin_ui_slice
+implementation_status: curated_aql_query_slice
 portable: true
 ---
 
@@ -12,7 +12,7 @@ portable: true
 
 ## Current State
 
-The plan has been drafted from the openEHR architecture review and the current VCMS EMR Builder direction. The first reusable runtime EHRbase bridge slice is now implemented and live-smoke-tested locally. A first Template Registry API slice now exposes local template listing, OPT upload/sync, and Web Template-derived runtime manifests. A first admin UI slice now gives privileged Builder users a reusable openEHR Template Registry screen for OPT upload, CDR sync, registered template review, and runtime manifest inspection.
+The plan has been drafted from the openEHR architecture review and the current VCMS EMR Builder direction. The first reusable runtime EHRbase bridge slice is now implemented and live-smoke-tested locally. A first Template Registry API slice now exposes local template listing, OPT upload/sync, and Web Template-derived runtime manifests. A first admin UI slice now gives privileged Builder users a reusable openEHR Template Registry screen for OPT upload, CDR sync, registered template review, and runtime manifest inspection. A first curated AQL service slice now exposes governed Composition lookup queries without exposing arbitrary AQL.
 
 EHRbase has been added to the local Docker Compose setup and brought up successfully. The local EHRbase API is reachable at:
 
@@ -53,6 +53,14 @@ The current VCMS EMR Builder is still a form-oriented editor and must evolve int
   - sync from an existing CDR template ID.
   - local template registry table review.
   - Web Template runtime manifest inspection with sections, fields, required count, repeating count, FLAT base paths, input suffix paths, and option counts.
+- Curated AQL query service added with named server-side query definitions:
+  - `composition.list_by_ehr`
+  - `composition.list_by_template`
+  - `composition.get_by_uid`
+- Curated AQL API added:
+  - `GET /api/v1/openehr/aql/queries`
+  - `POST /api/v1/openehr/aql/queries/execute`
+- New `emr.aql.query` privilege added for governed clinical CDR query execution.
 - Local seed now creates two password-backed users:
   - `admin@example.test / ChangeMe123!`
   - `emr.tester@example.test / ChangeMe123!`
@@ -68,11 +76,10 @@ The current VCMS EMR Builder is still a form-oriented editor and must evolve int
 - Runtime form submission to EHRbase: wired for PEC OPD clinical note submission.
 - Data Dictionary persistence model: field/option-set/fragment assets exist; deeper openEHR archetype/template binding workflow remains future work.
 - Template registry: persistence, service foundation, management API, runtime manifest API, and initial admin UI implemented; full governance workflow remains future work.
-- AQL query service: low-level client method implemented; curated query service/API remains future work.
+- AQL query service: low-level client method plus first curated query registry/API implemented.
 
 ## Not Started
 
-- Curated AQL query registry and service.
 - Template publication workflow.
 - Instruction/Action workflow implementation.
 - Consent and data-level access policy.

@@ -179,6 +179,12 @@ roles = ["admin", "barcode_print_manager"]
 resource = "system"
 audit = true
 
+[privileges."emr.aql.query"]
+description = "Execute curated openEHR AQL queries against the clinical data repository"
+roles = ["admin"]
+resource = "system"
+audit = true
+
 [privileges."terminology.view"]
 description = "Search and inspect configured clinical terminology concepts"
 roles = ["admin", "barcode_print_manager"]

@@ -44,6 +44,14 @@ describe('privilege registry', () => {
 		});
 	});
 
+	it('loads curated openEHR AQL query privilege', () => {
+		expect(getPrivilege('emr.aql.query')).toMatchObject({
+			resource: 'system',
+			audit: true,
+			roles: ['admin']
+		});
+	});
+
 	it('loads terminology read privilege', () => {
 		expect(getPrivilege('terminology.view')).toMatchObject({
 			resource: 'system',

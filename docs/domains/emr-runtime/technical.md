@@ -82,6 +82,20 @@ The first Template Registry admin UI is available at `/emr-builder/openehr`. It 
 
 `npm run ehrbase:smoke` is the local integration proof for the current bridge. It exercises template availability, Web Template retrieval, EHR creation, FLAT Composition commit, and AQL lookup against the running EHRbase container.
 
+## Curated AQL Query Service
+
+The reusable openEHR layer exposes AQL through a curated query registry, not a raw query endpoint. This keeps CDR retrieval governed by application policy while still using EHRbase as the source of truth for Composition retrieval.
+
+The first query service slice defines named query IDs for common Composition lookup tasks:
+
+- `composition.list_by_ehr`
+- `composition.list_by_template`
+- `composition.get_by_uid`
+
+Each query definition owns its allowed parameters, default fetch count, maximum fetch count, and raw AQL text. API callers can list query metadata and execute one named query with validated parameters. Raw AQL text remains server-side.
+
+Clinical query execution requires `emr.aql.query`, uses read rate limits, and writes an audit record with query ID, parameter names, pagination, and row count.
+
 ## Immutable Notes And Corrections
 
 Draft notes may be edited until signing. Signed clinical records are CDR Compositions and are immutable in the application model.
