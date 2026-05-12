@@ -25,3 +25,5 @@ This directory stores implementation plans, architecture decisions, and phase-by
 
 - `2026-05-07-initial-barcode-app/plan.md`: concrete application implementation plan.
 - `2026-05-07-initial-barcode-app/implementation-status.md`: implementation status for the initial barcode app plan.
+- `2026-05-11-openehr-emr-platform/plan.md`: reusable openEHR-first EMR platform plan for VCMS and non-VCMS deployments.
+- `2026-05-11-openehr-emr-platform/implementation-status.md`: planning status for the reusable openEHR-first EMR platform.

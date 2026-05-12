@@ -31,6 +31,28 @@ function databaseForInsert(created: unknown, existing: unknown[] = []) {
 	};
 }
 
+function databaseForOpenEhrIdentityUpdate(updated: unknown) {
+	const returning = vi.fn(() => Promise.resolve(updated ? [updated] : []));
+	const where = vi.fn(() => ({ returning }));
+	const setCalledWith = vi.fn();
+	const set = vi.fn((input: unknown) => {
+		setCalledWith(input);
+		return { where };
+	});
+	const update = vi.fn(() => ({ set }));
+
+	return {
+		database: { update },
+		calls: {
+			update,
+			set,
+			setCalledWith,
+			where,
+			returning
+		}
+	};
+}
+
 describe('PatientRepository', () => {
 	it('returns the newly inserted patient for a new barcode', async () => {
 		const patient = {
@@ -103,5 +125,35 @@ describe('PatientRepository', () => {
 		expect(calls.insert).toHaveBeenCalledTimes(1);
 		expect(calls.select).toHaveBeenCalledTimes(1);
 		expect(calls.onConflictDoNothing).toHaveBeenCalledTimes(1);
+	});
+
+	it('stores the linked openEHR identity for a local patient', async () => {
+		const updated = {
+			id: 'patient-1',
+			openEhrId: 'ehr-1',
+			openEhrSubjectId: 'patient-1',
+			openEhrSubjectNamespace: 'vcms-patient'
+		};
+		const { database, calls } = databaseForOpenEhrIdentityUpdate(updated);
+		const repository = new PatientRepository(database as never);
+
+		await expect(
+			repository.updateOpenEhrIdentity('patient-1', {
+				openEhrId: 'ehr-1',
+				openEhrSubjectId: 'patient-1',
+				openEhrSubjectNamespace: 'vcms-patient'
+			})
+		).resolves.toBe(updated);
+
+		expect(calls.update).toHaveBeenCalledTimes(1);
+		expect(calls.where).toHaveBeenCalledTimes(1);
+		expect(calls.setCalledWith).toHaveBeenCalledWith(
+			expect.objectContaining({
+				openEhrId: 'ehr-1',
+				openEhrSubjectId: 'patient-1',
+				openEhrSubjectNamespace: 'vcms-patient',
+				updatedAt: expect.any(Date)
+			})
+		);
 	});
 });

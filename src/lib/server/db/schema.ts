@@ -32,6 +32,11 @@ export const carePathwayStatus = pgEnum('care_pathway_status', [
 	'cancelled'
 ]);
 export const clinicalNoteStatus = pgEnum('clinical_note_status', ['draft', 'signed', 'amended']);
+export const openEhrTemplateStatus = pgEnum('openehr_template_status', [
+	'uploaded',
+	'active',
+	'retired'
+]);
 export const emrDictionaryAssetKind = pgEnum('emr_dictionary_asset_kind', [
 	'field',
 	'option_set',
@@ -235,12 +240,16 @@ export const patients = pgTable(
 		ageYears: integer('age_years'),
 		phone: text('phone'),
 		address: text('address'),
+		openEhrId: text('openehr_ehr_id'),
+		openEhrSubjectId: text('openehr_subject_id'),
+		openEhrSubjectNamespace: text('openehr_subject_namespace'),
 		createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
 		createdAt: timestamp('created_at').notNull().defaultNow(),
 		updatedAt: timestamp('updated_at').notNull().defaultNow()
 	},
 	(table) => [
 		uniqueIndex('patients_barcode_uidx').on(table.barcode),
+		uniqueIndex('patients_openehr_ehr_id_uidx').on(table.openEhrId),
 		index('patients_primary_pec_idx').on(table.primaryPecId),
 		check('patients_barcode_not_blank_check', sql`length(trim(${table.barcode})) > 0`),
 		check('patients_full_name_not_blank_check', sql`length(trim(${table.fullName})) > 0`),
@@ -345,11 +354,17 @@ export const clinicalNoteVersions = pgTable(
 		payloadHash: text('payload_hash').notNull(),
 		reason: text('reason').notNull().default(''),
 		payload: jsonb('payload_json').notNull(),
+		openEhrId: text('openehr_ehr_id'),
+		openEhrCompositionUid: text('openehr_composition_uid'),
+		openEhrTemplateId: text('openehr_template_id'),
+		openEhrCompositionFormat: text('openehr_composition_format').notNull().default('FLAT'),
 		submittedBy: text('submitted_by').references(() => user.id, { onDelete: 'set null' }),
 		submittedAt: timestamp('submitted_at').notNull().defaultNow()
 	},
 	(table) => [
 		uniqueIndex('clinical_note_versions_note_version_uidx').on(table.noteId, table.version),
+		index('clinical_note_versions_ehr_idx').on(table.openEhrId),
+		index('clinical_note_versions_composition_uid_idx').on(table.openEhrCompositionUid),
 		check('clinical_note_versions_version_check', sql`${table.version} > 0`)
 	]
 );
@@ -538,6 +553,61 @@ export const emrDictionaryAssetVersions = pgTable(
 	]
 );
 
+export const openEhrTemplates = pgTable(
+	'openehr_templates',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		templateId: text('template_id').notNull(),
+		cdrTemplateId: text('cdr_template_id').notNull(),
+		concept: text('concept'),
+		archetypeId: text('archetype_id'),
+		format: text('format').notNull().default('ADL1.4'),
+		status: openEhrTemplateStatus('status').notNull().default('uploaded'),
+		operationalTemplateHash: text('operational_template_hash'),
+		webTemplateHash: text('web_template_hash'),
+		webTemplateRootId: text('web_template_root_id'),
+		metadata: jsonb('metadata_json').notNull().default({}),
+		uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+		uploadedAt: timestamp('uploaded_at').notNull().defaultNow(),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('openehr_templates_template_id_uidx').on(table.templateId),
+		uniqueIndex('openehr_templates_cdr_template_id_uidx').on(table.cdrTemplateId),
+		index('openehr_templates_status_idx').on(table.status),
+		check(
+			'openehr_templates_template_id_not_blank_check',
+			sql`length(trim(${table.templateId})) > 0`
+		),
+		check(
+			'openehr_templates_cdr_template_id_not_blank_check',
+			sql`length(trim(${table.cdrTemplateId})) > 0`
+		)
+	]
+);
+
+export const openEhrWebTemplateCaches = pgTable(
+	'openehr_web_template_caches',
+	{
+		id: uuid('id').defaultRandom().primaryKey(),
+		templateId: uuid('template_id')
+			.notNull()
+			.references(() => openEhrTemplates.id, { onDelete: 'cascade' }),
+		cdrTemplateId: text('cdr_template_id').notNull(),
+		webTemplateHash: text('web_template_hash').notNull(),
+		webTemplateJson: jsonb('web_template_json').notNull(),
+		fetchedBy: text('fetched_by').references(() => user.id, { onDelete: 'set null' }),
+		fetchedAt: timestamp('fetched_at').notNull().defaultNow(),
+		createdAt: timestamp('created_at').notNull().defaultNow(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('openehr_web_template_caches_template_id_uidx').on(table.templateId),
+		index('openehr_web_template_caches_cdr_template_idx').on(table.cdrTemplateId)
+	]
+);
+
 export const clinicalWorklists = pgTable(
 	'clinical_worklists',
 	{
@@ -645,6 +715,20 @@ export const emrDictionaryAssetVersionRelations = relations(
 		})
 	})
 );
+
+export const openEhrTemplateRelations = relations(openEhrTemplates, ({ one }) => ({
+	webTemplateCache: one(openEhrWebTemplateCaches, {
+		fields: [openEhrTemplates.id],
+		references: [openEhrWebTemplateCaches.templateId]
+	})
+}));
+
+export const openEhrWebTemplateCacheRelations = relations(openEhrWebTemplateCaches, ({ one }) => ({
+	template: one(openEhrTemplates, {
+		fields: [openEhrWebTemplateCaches.templateId],
+		references: [openEhrTemplates.id]
+	})
+}));
 
 export const teamRelations = relations(teams, ({ many }) => ({ pecs: many(pecs) }));
 export const pecRelations = relations(pecs, ({ one, many }) => ({

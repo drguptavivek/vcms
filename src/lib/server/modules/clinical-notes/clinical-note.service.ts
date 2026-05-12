@@ -9,6 +9,8 @@ import { EncounterRepository } from '../encounters/encounter.repository';
 import { PatientRepository } from '../patients/patient.repository';
 import { ClinicalNoteRepository } from './clinical-note.repository';
 import { ClinicalWorklistService } from '../clinical-worklists/clinical-worklist.service';
+import { ehrCompositionService } from '../ehrbase/ehr-composition.service';
+import type { OpenEhrCompositionReference } from '../ehrbase/ehrbase.types';
 import type { SubmitPecOpdMobileNoteInput, SubmitPecOpdNoteInput } from './clinical-note.schemas';
 
 type ClinicalNoteSubmitInput = {
@@ -28,7 +30,13 @@ type ClinicalNoteMobileSubmitInput = {
 };
 
 type NoteVersionInput = Parameters<typeof ClinicalNoteRepository.prototype.createVersion>[0];
-type NotePayload = { chiefComplaint?: string; diagnosis?: string; plan?: string };
+type StoredCompositionPayload = {
+	openEhr: OpenEhrCompositionReference;
+	hashes: {
+		localPayloadHash: string;
+		flatPayloadHash: string;
+	};
+};
 
 type MobileSubmissionRecord = Awaited<
 	ReturnType<ClinicalNoteRepository['findMobileSubmissionResultByUserAndIdempotency']>
@@ -47,6 +55,15 @@ type ClinicalNoteSubmitResult = {
 type MobileSubmissionResult = ClinicalNoteSubmitResult;
 
 const pecOpdNoteType = 'pec_opd';
+const workflowAnswerKeys = new Set([
+	'referralNeeded',
+	'followUpRequested',
+	'nextReviewRequired',
+	'riskLevel',
+	'followUpDate',
+	'dueDate',
+	'followUpDays'
+]);
 
 function normalizeName(value: string) {
 	return value.trim().toLowerCase();
@@ -54,6 +71,14 @@ function normalizeName(value: string) {
 
 function buildPayloadHash(payload: NoteVersionInput['payload']) {
 	return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
+function pickWorkflowAnswers(answers: Record<string, unknown>) {
+	return Object.fromEntries(
+		Object.entries(answers).filter(
+			([key, value]) => workflowAnswerKeys.has(key) && value !== undefined
+		)
+	);
 }
 
 function toCanonicalJson(value: unknown): unknown {
@@ -129,7 +154,8 @@ export class ClinicalNoteService {
 		private readonly carePathwayRepository = new CarePathwayRepository(),
 		private readonly clinicalNoteRepository = new ClinicalNoteRepository(),
 		private readonly clinicalWorklistService = new ClinicalWorklistService(),
-		private readonly runInTransaction = db.transaction.bind(db)
+		private readonly runInTransaction = db.transaction.bind(db),
+		private readonly runtimeCompositionService = ehrCompositionService
 	) {}
 
 	async submitPecOpdNote(input: ClinicalNoteSubmitInput): Promise<ClinicalNoteSubmitResult> {
@@ -346,6 +372,7 @@ export class ClinicalNoteService {
 			createdBy: input.userId
 		});
 
+		const workflowAnswers = pickWorkflowAnswers(input.body.pathway.answers);
 		const carePathway = await carePathwayRepository.create({
 			patientId: patient.id,
 			encounterId: encounter.id,
@@ -355,19 +382,30 @@ export class ClinicalNoteService {
 				pecId: input.body.pecId,
 				branchSource: input.body.pathway.branchSource,
 				definitionVersion: input.body.pathway.definitionVersion,
-				answers: input.body.pathway.answers
+				workflowAnswers
 			},
 			createdBy: input.userId
 		});
 
-		const notePayload: NoteVersionInput['payload'] = {
-			...input.body.note.payload,
-			chiefComplaint: input.body.note.chiefComplaint,
-			visualAcuity: input.body.note.visualAcuity,
-			diagnosis: input.body.note.diagnosis,
-			plan: input.body.note.plan,
-			pathwayType: carePathway.pathwayType,
-			submissionSource: input.body.submissionSource
+		const compositionSubmission = await this.runtimeCompositionService.submitRuntimeComposition({
+			patient,
+			occurredAt: encounterOccurredAt,
+			note: {
+				chiefComplaint: input.body.note.chiefComplaint,
+				visualAcuity: input.body.note.visualAcuity,
+				diagnosis: input.body.note.diagnosis,
+				plan: input.body.note.plan,
+				payload: input.body.note.payload
+			},
+			userId: input.userId,
+			patientRepository
+		});
+		const storedCompositionPayload: StoredCompositionPayload = {
+			openEhr: compositionSubmission.reference,
+			hashes: {
+				localPayloadHash: compositionSubmission.localPayloadHash,
+				flatPayloadHash: compositionSubmission.flatPayloadHash
+			}
 		};
 
 		const latestNote = await clinicalNoteRepository.findLatestByEncounterAndType(
@@ -381,16 +419,11 @@ export class ClinicalNoteService {
 			});
 		}
 
-		const { pathwayType: payloadPathwayType, ...worklistInputPayload } =
-			notePayload as NotePayload & {
-				pathwayType?: string;
-			};
-		const pathwayType =
-			carePathway.pathwayType ?? input.body.pathway.pathwayType ?? payloadPathwayType;
+		const pathwayType = carePathway.pathwayType ?? input.body.pathway.pathwayType;
 
 		let noteVersion;
 		let note;
-		const notePayloadHash = buildPayloadHash(notePayload);
+		const notePayloadHash = buildPayloadHash(storedCompositionPayload);
 
 		if (!latestNote) {
 			note = await clinicalNoteRepository.create({
@@ -410,7 +443,11 @@ export class ClinicalNoteService {
 				payloadHash: notePayloadHash,
 				changeType: 'create',
 				reason: 'initial_submission',
-				payload: notePayload,
+				payload: storedCompositionPayload,
+				openEhrId: compositionSubmission.reference.ehrId,
+				openEhrCompositionUid: compositionSubmission.reference.compositionUid,
+				openEhrTemplateId: compositionSubmission.reference.templateId,
+				openEhrCompositionFormat: compositionSubmission.reference.format,
 				submittedBy: input.userId
 			});
 
@@ -428,6 +465,9 @@ export class ClinicalNoteService {
 					noteId: note.id,
 					version: noteVersion.version,
 					versionId: noteVersion.id,
+					openEhrId: compositionSubmission.reference.ehrId,
+					openEhrCompositionUid: compositionSubmission.reference.compositionUid,
+					openEhrTemplateId: compositionSubmission.reference.templateId,
 					barcode: patient.barcode,
 					isInitialSubmission: true
 				},
@@ -441,9 +481,8 @@ export class ClinicalNoteService {
 				sourceEncounterId: encounter.id,
 				sourceClinicalNoteId: note.id,
 				pathwayType,
-				pathwayAnswers: input.body.pathway.answers,
+				pathwayAnswers: workflowAnswers,
 				encounterOccurredAt,
-				...worklistInputPayload,
 				createdBy: input.userId
 			});
 
@@ -459,14 +498,18 @@ export class ClinicalNoteService {
 		}
 
 		const nextVersion = latestNote.currentVersion + 1;
-		const nextPayloadHash = buildPayloadHash(notePayload);
+		const nextPayloadHash = buildPayloadHash(storedCompositionPayload);
 		noteVersion = await clinicalNoteRepository.createVersion({
 			noteId: latestNote.id,
 			version: nextVersion,
 			payloadHash: nextPayloadHash,
 			changeType: 'amendment',
 			reason: 'correction',
-			payload: notePayload,
+			payload: storedCompositionPayload,
+			openEhrId: compositionSubmission.reference.ehrId,
+			openEhrCompositionUid: compositionSubmission.reference.compositionUid,
+			openEhrTemplateId: compositionSubmission.reference.templateId,
+			openEhrCompositionFormat: compositionSubmission.reference.format,
 			submittedBy: input.userId
 		});
 
@@ -490,9 +533,8 @@ export class ClinicalNoteService {
 			sourceEncounterId: encounter.id,
 			sourceClinicalNoteId: latestNote.id,
 			pathwayType,
-			pathwayAnswers: input.body.pathway.answers,
+			pathwayAnswers: workflowAnswers,
 			encounterOccurredAt,
-			...worklistInputPayload,
 			createdBy: input.userId
 		});
 
@@ -515,6 +557,9 @@ export class ClinicalNoteService {
 				noteId: latestNote.id,
 				version: noteVersion.version,
 				versionId: noteVersion.id,
+				openEhrId: compositionSubmission.reference.ehrId,
+				openEhrCompositionUid: compositionSubmission.reference.compositionUid,
+				openEhrTemplateId: compositionSubmission.reference.templateId,
 				barcode: patient.barcode,
 				isInitialSubmission: false
 			},

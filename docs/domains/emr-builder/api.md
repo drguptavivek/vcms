@@ -44,6 +44,14 @@ Planned endpoint families that are not implemented yet:
 
 Definition routes require `emr.builder.manage`. Dictionary routes require `emr.dictionary.manage`. Route contract coverage lives in `src/routes/api/v1/emr-builder/emr-builder.route-contract.spec.ts` and `src/routes/api/v1/emr-builder/emr-dictionary.route-contract.spec.ts`.
 
+SNOMED CT picker traffic uses the separate Terminology domain:
+
+- `/api/v1/terminology/search`
+- `/api/v1/terminology/lookup`
+- `/api/v1/terminology/health`
+
+Those routes require `terminology.view` and are documented in `../terminology/api.md`.
+
 ## Transport Rules
 
 Routes transport data only. Business rules belong in `emr-builder.service.ts`, validation belongs in shared Zod schemas, and persistence belongs in `emr-builder.repository.ts`.
@@ -60,6 +68,7 @@ The draft payload is the versioned `EmrNoteDefinition` JSON model. The Builder s
 - `validation` for required messages, text length limits, numeric bounds, and patterns.
 - section-level `odk` metadata for group/repeat behavior.
 - field-level SNOMED CT metadata, including numeric concept IDs.
+- SNOMED CT binding metadata, including preferred term, fully specified name, semantic tag, edition, version, active status, provider/source service, and binding strength.
 - openEHR mapping metadata for archetype IDs, archetype paths, template IDs, template paths, Web Template flat paths, Reference Model node types, and data value types.
 - external choice source references for master data, terminology, clinical worklists, and future API-backed lists.
 

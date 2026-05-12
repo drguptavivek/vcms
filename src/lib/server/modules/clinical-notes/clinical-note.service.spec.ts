@@ -32,6 +32,10 @@ const clinicalWorklistService = vi.hoisted(() => ({
 	createFromPecSubmission: vi.fn()
 }));
 
+const runtimeCompositionService = vi.hoisted(() => ({
+	submitRuntimeComposition: vi.fn()
+}));
+
 vi.mock('../patients/patient.repository', () => ({
 	PatientRepository: class {
 		constructor() {
@@ -150,6 +154,16 @@ function buildMobileRequestHash(body: typeof baseMobileInput & Record<string, un
 describe('ClinicalNoteService', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		runtimeCompositionService.submitRuntimeComposition.mockResolvedValue({
+			reference: {
+				ehrId: 'ehr-1',
+				compositionUid: 'composition-1::vcms.local.ehrbase::1',
+				templateId: 'vcms-pec-opd.v1',
+				format: 'FLAT'
+			},
+			localPayloadHash: 'local-payload-hash',
+			flatPayloadHash: 'flat-payload-hash'
+		});
 	});
 
 	afterEach(() => {
@@ -163,7 +177,8 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			clinicalWorklistService as never,
-			runInTransactionMock([{ id: 4, active: true }]) as never
+			runInTransactionMock([{ id: 4, active: true }]) as never,
+			runtimeCompositionService as never
 		);
 
 		patientRepository.findByBarcode.mockResolvedValue(undefined);
@@ -201,6 +216,15 @@ describe('ClinicalNoteService', () => {
 			service.submitPecOpdNote({
 				body: {
 					...baseInput,
+					pathway: {
+						...baseInput.pathway,
+						answers: {
+							referralNeeded: 'yes',
+							followUpDays: '7',
+							visualAcuity: '6/12',
+							diagnosis: 'myopia'
+						}
+					},
 					note: {
 						chiefComplaint: 'Blurred vision',
 						diagnosis: 'myopia',
@@ -244,7 +268,13 @@ describe('ClinicalNoteService', () => {
 			expect.objectContaining({
 				patientId: 'patient-1',
 				encounterId: 'encounter-1',
-				pathwayType: 'pec_opd'
+				pathwayType: 'pec_opd',
+				context: expect.objectContaining({
+					workflowAnswers: {
+						referralNeeded: 'yes',
+						followUpDays: '7'
+					}
+				})
 			})
 		);
 		expect(clinicalWorklistService.createFromPecSubmission).toHaveBeenCalledWith(
@@ -254,6 +284,10 @@ describe('ClinicalNoteService', () => {
 				sourceEncounterId: 'encounter-1',
 				sourceClinicalNoteId: 'note-1',
 				pathwayType: 'pec_opd',
+				pathwayAnswers: {
+					referralNeeded: 'yes',
+					followUpDays: '7'
+				},
 				encounterOccurredAt: new Date('2026-05-09T09:15:00')
 			})
 		);
@@ -276,12 +310,33 @@ describe('ClinicalNoteService', () => {
 				reason: 'initial_submission',
 				submittedBy: 'user-1',
 				payload: {
-					acuity: '6/12',
+					openEhr: {
+						ehrId: 'ehr-1',
+						compositionUid: 'composition-1::vcms.local.ehrbase::1',
+						templateId: 'vcms-pec-opd.v1',
+						format: 'FLAT'
+					},
+					hashes: {
+						localPayloadHash: 'local-payload-hash',
+						flatPayloadHash: 'flat-payload-hash'
+					}
+				},
+				openEhrId: 'ehr-1',
+				openEhrCompositionUid: 'composition-1::vcms.local.ehrbase::1',
+				openEhrTemplateId: 'vcms-pec-opd.v1',
+				openEhrCompositionFormat: 'FLAT'
+			})
+		);
+		expect(runtimeCompositionService.submitRuntimeComposition).toHaveBeenCalledWith(
+			expect.objectContaining({
+				patient: expect.objectContaining({ id: 'patient-1' }),
+				userId: 'user-1',
+				note: expect.objectContaining({
 					chiefComplaint: 'Blurred vision',
 					diagnosis: 'myopia',
 					plan: 'reassess',
-					visualAcuity: undefined
-				}
+					payload: { acuity: '6/12' }
+				})
 			})
 		);
 		expect(audit.writeAudit).toHaveBeenCalledWith(
@@ -299,6 +354,9 @@ describe('ClinicalNoteService', () => {
 					noteId: 'note-1',
 					version: 1,
 					versionId: 'version-1',
+					openEhrId: 'ehr-1',
+					openEhrCompositionUid: 'composition-1::vcms.local.ehrbase::1',
+					openEhrTemplateId: 'vcms-pec-opd.v1',
 					barcode: '01-26-000001',
 					isInitialSubmission: true
 				}
@@ -313,7 +371,8 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			clinicalWorklistService as never,
-			runInTransactionMock([{ id: 4, active: true }] as never) as never
+			runInTransactionMock([{ id: 4, active: true }] as never) as never,
+			runtimeCompositionService as never
 		);
 
 		patientRepository.findByBarcode.mockResolvedValue(undefined);
@@ -381,12 +440,19 @@ describe('ClinicalNoteService', () => {
 				changeType: 'create',
 				reason: 'initial_submission',
 				payload: {
-					chiefComplaint: 'Blur',
-					acuity: '6/6',
-					diagnosis: undefined,
-					plan: undefined,
-					visualAcuity: undefined
-				}
+					openEhr: expect.objectContaining({
+						ehrId: 'ehr-1',
+						compositionUid: 'composition-1::vcms.local.ehrbase::1',
+						templateId: 'vcms-pec-opd.v1'
+					}),
+					hashes: {
+						localPayloadHash: 'local-payload-hash',
+						flatPayloadHash: 'flat-payload-hash'
+					}
+				},
+				openEhrId: 'ehr-1',
+				openEhrCompositionUid: 'composition-1::vcms.local.ehrbase::1',
+				openEhrTemplateId: 'vcms-pec-opd.v1'
 			})
 		);
 		expect(clinicalNoteRepository.createVersion).toHaveBeenNthCalledWith(
@@ -397,14 +463,22 @@ describe('ClinicalNoteService', () => {
 				changeType: 'amendment',
 				reason: 'correction',
 				payload: {
-					chiefComplaint: 'Blur better',
-					acuity: '6/9',
-					diagnosis: 'improved',
-					plan: undefined,
-					visualAcuity: undefined
-				}
+					openEhr: expect.objectContaining({
+						ehrId: 'ehr-1',
+						compositionUid: 'composition-1::vcms.local.ehrbase::1',
+						templateId: 'vcms-pec-opd.v1'
+					}),
+					hashes: {
+						localPayloadHash: 'local-payload-hash',
+						flatPayloadHash: 'flat-payload-hash'
+					}
+				},
+				openEhrId: 'ehr-1',
+				openEhrCompositionUid: 'composition-1::vcms.local.ehrbase::1',
+				openEhrTemplateId: 'vcms-pec-opd.v1'
 			})
 		);
+		expect(runtimeCompositionService.submitRuntimeComposition).toHaveBeenCalledTimes(2);
 		expect(clinicalNoteRepository.updateCurrentVersion).toHaveBeenCalledWith(
 			'note-1',
 			expect.objectContaining({
@@ -439,7 +513,8 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			clinicalWorklistService as never,
-			runInTransactionMock([]) as never
+			runInTransactionMock([]) as never,
+			runtimeCompositionService as never
 		);
 
 		await expect(
@@ -469,7 +544,8 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			clinicalWorklistService as never,
-			runInTransactionMock([{ id: 4, active: true }] as never) as never
+			runInTransactionMock([{ id: 4, active: true }] as never) as never,
+			runtimeCompositionService as never
 		);
 		const replayPayload = {
 			patientId: 'patient-1',
@@ -513,7 +589,8 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			clinicalWorklistService as never,
-			runInTransactionMock([{ id: 4, active: true }] as never) as never
+			runInTransactionMock([{ id: 4, active: true }] as never) as never,
+			runtimeCompositionService as never
 		);
 		clinicalNoteRepository.findMobileSubmissionResultByUserAndIdempotency.mockResolvedValue({
 			id: 'sub-1',
@@ -548,7 +625,8 @@ describe('ClinicalNoteService', () => {
 			undefined,
 			undefined,
 			clinicalWorklistService as never,
-			runInTransactionMock([{ id: 4, active: true }] as never) as never
+			runInTransactionMock([{ id: 4, active: true }] as never) as never,
+			runtimeCompositionService as never
 		);
 		patientRepository.findByBarcode.mockResolvedValue(undefined);
 		patientRepository.createForBarcode.mockResolvedValue({

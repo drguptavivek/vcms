@@ -33,10 +33,12 @@ Update documentation whenever implementation changes behavior, workflows, archit
 - `domains/master-data/`: teams and PEC master data.
 - `domains/observability-security/`: runtime logging, SQL errors, audit logs, rate limiting, and route security.
 - `domains/printer-templates/`: browser/PDF, ZPL, and EPL template configuration.
+- `domains/terminology/`: SNOMED CT search, concept lookup, provider configuration, and terminology-browser boundary.
 
 ## Standards
 
 - `standards/architecture.md`: clean architecture and service-oriented module boundaries.
+- `standards/openehr-emr-implementation.md`: portable openEHR EMR architecture for dictionary, templates, Compositions, AQL, consent, migration, and EHRbase-style CDR integration.
 - `standards/sveltekit.md`: SvelteKit conventions and project-local Svelte MCP usage.
 - `standards/tdd.md`: TDD and testing framework expectations.
 

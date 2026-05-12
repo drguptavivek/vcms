@@ -26,6 +26,7 @@
 
 	const emrBuilderLinks = [
 		{ path: '/emr-builder', label: 'Forms', icon: 'forms' },
+		{ path: '/emr-builder/openehr', label: 'openEHR Templates', icon: 'database' },
 		{ path: '/emr-builder/pec-opd-register/edit', label: 'OPD Register', icon: 'edit' },
 		{
 			path: '/emr-builder/reported-patients-record/edit',

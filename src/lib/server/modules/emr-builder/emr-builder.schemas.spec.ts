@@ -351,9 +351,17 @@ describe('emr note definition schema', () => {
 							{
 								...baseDefinition.layout.sections[0].fields[0],
 								snomed: {
+									terminologySystem: 'SNOMED_CT',
 									conceptId: '247000',
 									preferredTerm: 'Visual acuity',
-									displayTerm: 'Visual Acuity'
+									displayTerm: 'Visual Acuity',
+									fullySpecifiedName: 'Visual acuity (observable entity)',
+									semanticTag: 'observable entity',
+									edition: 'SNOMEDCT-International',
+									version: '20260101',
+									active: true,
+									bindingStrength: 'unreviewed',
+									sourceService: 'mock'
 								}
 							}
 						]
@@ -364,7 +372,10 @@ describe('emr note definition schema', () => {
 
 		expect(parsed.layout.sections[0].fields[0].snomed).toMatchObject({
 			conceptId: '247000',
-			preferredTerm: 'Visual acuity'
+			preferredTerm: 'Visual acuity',
+			fullySpecifiedName: 'Visual acuity (observable entity)',
+			edition: 'SNOMEDCT-International',
+			bindingStrength: 'unreviewed'
 		});
 	});
 

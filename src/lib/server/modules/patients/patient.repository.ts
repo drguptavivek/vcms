@@ -9,7 +9,12 @@ export class PatientRepository {
 	constructor(private readonly database: Database = db) {}
 
 	getById(id: string) {
-		return this.database.select().from(patients).where(eq(patients.id, id)).limit(1).then((rows) => rows[0]);
+		return this.database
+			.select()
+			.from(patients)
+			.where(eq(patients.id, id))
+			.limit(1)
+			.then((rows) => rows[0]);
 	}
 
 	async findByBarcode(barcode: string) {
@@ -34,5 +39,21 @@ export class PatientRepository {
 		if (created) return created;
 
 		return this.getByBarcode(input.barcode);
+	}
+
+	async updateOpenEhrIdentity(
+		id: string,
+		input: {
+			openEhrId: string;
+			openEhrSubjectId: string;
+			openEhrSubjectNamespace: string;
+		}
+	) {
+		const [patient] = await this.database
+			.update(patients)
+			.set({ ...input, updatedAt: new Date() })
+			.where(eq(patients.id, id))
+			.returning();
+		return patient;
 	}
 }

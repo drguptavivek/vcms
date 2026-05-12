@@ -2,14 +2,14 @@
 title: EMR Builder User Guide
 status: draft
 owner: operations
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-12
 ---
 
 # EMR Builder User Guide
 
 ## Current Builder Workflow
 
-Builder administrators can open EMR Builder from the authenticated app shell. `/emr-builder` opens the Forms landing page. The left navigation includes Forms plus direct edit shortcuts for OPD Register, Reported Patients, Cataract Surgery, and Cataract Follow-up.
+Builder administrators can open EMR Builder from the authenticated app shell. `/emr-builder` opens the Forms landing page. The left navigation includes Forms, openEHR Templates, and direct edit shortcuts for OPD Register, Reported Patients, Cataract Surgery, and Cataract Follow-up.
 
 Current supported workflow:
 
@@ -31,6 +31,20 @@ The left palette includes a Data Dictionary area. Use it to insert reusable fiel
 The Forms landing page lists saved Builder definitions and imported fixture forms. It shows form status, version, section and field counts, import notes, and runtime/mobile usage.
 
 Use Edit to open the direct edit route for a form. Use Preview to open the same editor with `?preview=1`.
+
+## openEHR Templates
+
+`/emr-builder/openehr` is the privileged Template Registry admin screen. It is for reusable openEHR template operations, not VCMS-specific form editing.
+
+Current supported workflow:
+
+1. Upload an ADL 1.4 OPT XML file to EHRbase and cache the Web Template locally.
+2. Sync an existing CDR template ID when the template already exists in EHRbase.
+3. Review local template registry metadata, including concept, template ID, Web Template root, status, hash, and update time.
+4. Inspect the runtime manifest generated from the cached Web Template.
+5. Use manifest fields, FLAT base paths, input suffixes, required markers, repeating markers, context markers, and option counts as the bridge between Builder/runtime UI and EHRbase Composition submission.
+
+Template Registry access requires `emr.template.manage`.
 
 ## Direct Edit Workflow
 

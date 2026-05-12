@@ -16,6 +16,7 @@ This directory is retained as a legacy technical index. New technical documentat
 - `../domains/master-data/index.md`: teams and PEC master data.
 - `../domains/observability-security/index.md`: runtime logging, SQL errors, audit logs, rate limiting, and route security.
 - `../domains/printer-templates/index.md`: browser/PDF, ZPL, and EPL template configuration.
+- `../domains/terminology/index.md`: SNOMED CT search, concept lookup, provider configuration, and browser/API boundary.
 
 ## Current Standards
 

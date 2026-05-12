@@ -36,6 +36,22 @@ describe('privilege registry', () => {
 		});
 	});
 
+	it('loads openEHR template management privilege', () => {
+		expect(getPrivilege('emr.template.manage')).toMatchObject({
+			resource: 'system',
+			audit: true,
+			roles: expect.arrayContaining(['admin'])
+		});
+	});
+
+	it('loads terminology read privilege', () => {
+		expect(getPrivilege('terminology.view')).toMatchObject({
+			resource: 'system',
+			audit: false,
+			roles: expect.arrayContaining(['barcode_print_manager'])
+		});
+	});
+
 	it('loads mobile EMR runtime definition privilege', () => {
 		expect(getPrivilege('emr.runtime.mobile_definition.view')).toMatchObject({
 			resource: 'system',

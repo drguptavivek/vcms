@@ -150,7 +150,18 @@ export const emrExpressionSchema: z.ZodType<EmrExpression> = z.lazy(() =>
 const emrSnomedMetadataSchema = z.object({
 	conceptId: z.string().trim().min(1).regex(/^\d+$/),
 	preferredTerm: z.string().trim().min(1).max(300).optional(),
-	displayTerm: z.string().trim().min(1).max(300).optional()
+	displayTerm: z.string().trim().min(1).max(300).optional(),
+	fullySpecifiedName: z.string().trim().min(1).max(500).optional(),
+	semanticTag: z.string().trim().min(1).max(80).optional(),
+	terminologySystem: z.literal('SNOMED_CT').optional(),
+	edition: z.string().trim().min(1).max(120).optional(),
+	version: z.string().trim().min(1).max(80).optional(),
+	moduleId: z.string().trim().min(1).max(40).optional(),
+	effectiveTime: z.string().trim().min(4).max(20).optional(),
+	languageRefset: z.string().trim().min(1).max(40).optional(),
+	active: z.boolean().optional(),
+	bindingStrength: z.enum(['exact', 'narrower', 'broader', 'related', 'unreviewed']).optional(),
+	sourceService: z.enum(['mock', 'snowstorm', 'csnoserv']).optional()
 });
 
 export const emrDefinitionStatusSchema = z.enum(['draft', 'active', 'retired']);

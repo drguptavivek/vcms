@@ -7,6 +7,7 @@
 		type EmrBuilderSection,
 		type EmrBuilderSelection
 	} from './emr-builder-reorder-model';
+	import { resolve } from '$app/paths';
 
 	type Props = {
 		definition: EmrBuilderDefinition | null;
@@ -23,6 +24,33 @@
 		onRemoveOption: (selection: EmrBuilderSelection, optionIndex: number) => void;
 		languages: string[];
 		activeLanguage: string;
+	};
+
+	type SnomedConceptResult = {
+		terminologySystem: 'SNOMED_CT';
+		conceptId: string;
+		preferredTerm: string;
+		fullySpecifiedName?: string;
+		semanticTag?: string;
+		active: boolean;
+		moduleId?: string;
+		effectiveTime?: string;
+		edition?: string;
+		version?: string;
+		languageRefset?: string;
+		sourceService?: string;
+	};
+
+	type TerminologySearchPayload = {
+		ok: boolean;
+		data?: {
+			provider: string;
+			edition?: string;
+			version?: string;
+			browserUrl?: string;
+			results: SnomedConceptResult[];
+		};
+		error?: { message?: string };
 	};
 
 	let {
@@ -76,6 +104,11 @@
 
 	let sectionJson = $derived.by(() => JSON.stringify(section, null, 2));
 	let fieldJson = $derived.by(() => JSON.stringify(field, null, 2));
+	let snomedQuery = $state('');
+	let snomedResults = $state<SnomedConceptResult[]>([]);
+	let snomedStatus = $state<'idle' | 'loading' | 'error'>('idle');
+	let snomedError = $state('');
+	let snomedBrowserUrl = $state<string | undefined>(undefined);
 
 	function asString(value: unknown): string {
 		if (typeof value === 'string') return value;
@@ -83,6 +116,38 @@
 		if (value && typeof value === 'object' && 'value' in value) {
 			const expressionValue = (value as { value?: unknown }).value;
 			return asString(expressionValue);
+		}
+		return '';
+	}
+
+	function recordFrom(value: unknown): Record<string, unknown> {
+		return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+	}
+
+	function nestedRecordFrom(value: unknown, key: string): Record<string, unknown> {
+		return recordFrom(recordFrom(value)[key]);
+	}
+
+	function fieldGroup(group: string): Record<string, unknown> {
+		return field ? recordFrom(field[group]) : {};
+	}
+
+	function sectionGroup(group: string): Record<string, unknown> {
+		return section ? recordFrom(section[group]) : {};
+	}
+
+	function fieldGroupValue(group: string, key: string): unknown {
+		return fieldGroup(group)[key];
+	}
+
+	function sectionGroupValue(group: string, key: string): unknown {
+		return sectionGroup(group)[key];
+	}
+
+	function firstString(...values: unknown[]): string {
+		for (const value of values) {
+			const stringValue = asString(value);
+			if (stringValue) return stringValue;
 		}
 		return '';
 	}
@@ -119,7 +184,103 @@
 
 	function updateSnomed(patch: Record<string, unknown>) {
 		if (!field) return;
-		updateField({ snomed: { ...(field.snomed as object | undefined), ...patch } });
+		const current = field.snomed && typeof field.snomed === 'object' ? field.snomed : {};
+		const next = compactRecord({ ...(current as Record<string, unknown>), ...patch });
+		updateField({ snomed: Object.keys(next).length ? next : undefined });
+	}
+
+	function compactRecord(source: Record<string, unknown>) {
+		return Object.fromEntries(
+			Object.entries(source).filter(
+				([, value]) => value !== undefined && value !== null && value !== ''
+			)
+		);
+	}
+
+	function currentSnomedConceptId() {
+		return asString((field?.snomed as { conceptId?: unknown } | undefined)?.conceptId);
+	}
+
+	function clearSnomed() {
+		updateSnomed({
+			conceptId: undefined,
+			preferredTerm: undefined,
+			displayTerm: undefined,
+			fullySpecifiedName: undefined,
+			semanticTag: undefined,
+			terminologySystem: undefined,
+			edition: undefined,
+			version: undefined,
+			moduleId: undefined,
+			effectiveTime: undefined,
+			languageRefset: undefined,
+			active: undefined,
+			bindingStrength: undefined,
+			sourceService: undefined
+		});
+		snomedResults = [];
+		snomedError = '';
+		snomedStatus = 'idle';
+	}
+
+	async function searchSnomed() {
+		const query = snomedQuery.trim() || currentSnomedConceptId();
+		if (query.length < 2) {
+			snomedError = 'Enter at least two characters or a concept ID.';
+			snomedStatus = 'error';
+			return;
+		}
+
+		snomedStatus = 'loading';
+		snomedError = '';
+
+		try {
+			const response = await fetch(
+				`/api/v1/terminology/search?q=${encodeURIComponent(query)}&limit=8`,
+				{
+					headers: { accept: 'application/json' }
+				}
+			);
+			const payload = (await response.json()) as TerminologySearchPayload;
+			if (!response.ok || !payload.ok || !payload.data) {
+				throw new Error(payload.error?.message ?? 'SNOMED CT search failed.');
+			}
+
+			snomedResults = payload.data.results;
+			snomedBrowserUrl = payload.data.browserUrl;
+			snomedStatus = 'idle';
+			if (!payload.data.results.length) {
+				snomedError = 'No matching concepts found.';
+			}
+		} catch (error) {
+			snomedResults = [];
+			snomedStatus = 'error';
+			snomedError =
+				error instanceof Error ? error.message : 'SNOMED CT terminology service is unavailable.';
+		}
+	}
+
+	function selectSnomed(concept: SnomedConceptResult) {
+		updateSnomed({
+			terminologySystem: concept.terminologySystem,
+			conceptId: concept.conceptId,
+			preferredTerm: concept.preferredTerm,
+			displayTerm: concept.preferredTerm,
+			fullySpecifiedName: concept.fullySpecifiedName,
+			semanticTag: concept.semanticTag,
+			active: concept.active,
+			moduleId: concept.moduleId,
+			effectiveTime: concept.effectiveTime,
+			edition: concept.edition,
+			version: concept.version,
+			languageRefset: concept.languageRefset,
+			sourceService: concept.sourceService,
+			bindingStrength: 'unreviewed'
+		});
+		snomedQuery = concept.preferredTerm;
+		snomedResults = [];
+		snomedError = '';
+		snomedStatus = 'idle';
 	}
 
 	function updateSectionOpenEhrMapping(patch: Record<string, unknown>) {
@@ -214,8 +375,14 @@
 		'Required message': 'Message shown when a required answer is missing.',
 		Value: 'Stored value for this option.',
 		'SNOMED CT code': 'Clinical code attached to this option or field.',
+		'Search SNOMED CT': 'Search the configured terminology service through the application API.',
 		'Concept ID': 'SNOMED CT concept identifier for this field.',
 		'Preferred term': 'Human-readable clinical term for the selected concept.',
+		'Fully specified name': 'Complete SNOMED CT term including semantic tag.',
+		'Semantic tag': 'SNOMED CT category such as disorder, finding, or procedure.',
+		Edition: 'SNOMED CT edition used when the concept was selected.',
+		'Terminology version': 'SNOMED CT release version used for this binding.',
+		'Binding strength': 'Review status or semantic strength of this code binding.',
 		'Web Template path':
 			'Flat path used when saving this value in an EHRbase Web Template composition.',
 		'Archetype ID': 'Clinical archetype that defines this reusable clinical concept.',
@@ -270,7 +437,7 @@
 				<label>
 					{@render labelText('Section relevance')}
 					<input
-						value={asString((section.odk as { relevant?: unknown } | undefined)?.relevant)}
+						value={asString(sectionGroupValue('odk', 'relevant'))}
 						oninput={(event) =>
 							updateSection({
 								odk: {
@@ -283,7 +450,7 @@
 				<label>
 					{@render labelText('Section appearance')}
 					<input
-						value={asString((section.odk as { appearance?: unknown } | undefined)?.appearance)}
+						value={asString(sectionGroupValue('odk', 'appearance'))}
 						oninput={(event) =>
 							updateSection({
 								odk: {
@@ -308,9 +475,7 @@
 					<label>
 						{@render labelText('Repeat count')}
 						<input
-							value={asString(
-								(section.odk as { repeat?: { count?: unknown } } | undefined)?.repeat?.count
-							)}
+							value={asString(nestedRecordFrom(section.odk, 'repeat').count)}
 							oninput={(event) =>
 								updateSection({
 									odk: {
@@ -332,9 +497,7 @@
 				<label>
 					{@render labelText('Web Template path')}
 					<input
-						value={asString(
-							(section.openEhrMapping as { webTemplatePath?: unknown } | undefined)?.webTemplatePath
-						)}
+						value={asString(sectionGroupValue('openEhrMapping', 'webTemplatePath'))}
 						oninput={(event) =>
 							updateSectionOpenEhrMapping({
 								webTemplatePath: (event.currentTarget as HTMLInputElement).value || undefined
@@ -344,9 +507,7 @@
 				<label>
 					{@render labelText('Archetype ID')}
 					<input
-						value={asString(
-							(section.openEhrMapping as { archetypeId?: unknown } | undefined)?.archetypeId
-						)}
+						value={asString(sectionGroupValue('openEhrMapping', 'archetypeId'))}
 						oninput={(event) =>
 							updateSectionOpenEhrMapping({
 								archetypeId: (event.currentTarget as HTMLInputElement).value || undefined
@@ -356,9 +517,7 @@
 				<label>
 					{@render labelText('Archetype path')}
 					<input
-						value={asString(
-							(section.openEhrMapping as { archetypePath?: unknown } | undefined)?.archetypePath
-						)}
+						value={asString(sectionGroupValue('openEhrMapping', 'archetypePath'))}
 						oninput={(event) =>
 							updateSectionOpenEhrMapping({
 								archetypePath: (event.currentTarget as HTMLInputElement).value || undefined
@@ -368,9 +527,7 @@
 				<label>
 					{@render labelText('Template ID')}
 					<input
-						value={asString(
-							(section.openEhrMapping as { templateId?: unknown } | undefined)?.templateId
-						)}
+						value={asString(sectionGroupValue('openEhrMapping', 'templateId'))}
 						oninput={(event) =>
 							updateSectionOpenEhrMapping({
 								templateId: (event.currentTarget as HTMLInputElement).value || undefined
@@ -380,9 +537,7 @@
 				<label>
 					{@render labelText('Template path')}
 					<input
-						value={asString(
-							(section.openEhrMapping as { templatePath?: unknown } | undefined)?.templatePath
-						)}
+						value={asString(sectionGroupValue('openEhrMapping', 'templatePath'))}
 						oninput={(event) =>
 							updateSectionOpenEhrMapping({
 								templatePath: (event.currentTarget as HTMLInputElement).value || undefined
@@ -392,10 +547,7 @@
 				<label>
 					{@render labelText('Structure type')}
 					<select
-						value={asString(
-							(section.openEhrMapping as { archetypeStructure?: unknown } | undefined)
-								?.archetypeStructure
-						)}
+						value={asString(sectionGroupValue('openEhrMapping', 'archetypeStructure'))}
 						onchange={(event) =>
 							updateSectionOpenEhrMapping({
 								archetypeStructure: (event.currentTarget as HTMLSelectElement).value || undefined
@@ -463,8 +615,7 @@
 			<label>
 				{@render labelText('Field name')}
 				<input
-					value={asString(field.fieldName) ||
-						asString((field.odkBind as { xlsformName?: unknown } | undefined)?.xlsformName)}
+					value={firstString(field.fieldName, fieldGroupValue('odkBind', 'xlsformName'))}
 					oninput={(event) =>
 						updateField({
 							fieldName: (event.currentTarget as HTMLInputElement).value || undefined
@@ -614,8 +765,7 @@
 					<input
 						type="checkbox"
 						checked={Boolean(
-							(field.input as { barcodeInput?: unknown } | undefined)?.barcodeInput ??
-							(field.odkBind as { barcodeInput?: unknown } | undefined)?.barcodeInput
+							fieldGroupValue('input', 'barcodeInput') ?? fieldGroupValue('odkBind', 'barcodeInput')
 						)}
 						onchange={(event) =>
 							updateFieldInput({
@@ -632,7 +782,7 @@
 			<label>
 				{@render labelText('Required expression')}
 				<input
-					value={asString((field.odkBind as { required?: unknown } | undefined)?.required)}
+					value={asString(fieldGroupValue('odkBind', 'required'))}
 					oninput={(event) =>
 						updateFieldLogic({
 							required: textExpression((event.currentTarget as HTMLInputElement).value)
@@ -642,9 +792,7 @@
 			<label>
 				{@render labelText('Required message')}
 				<input
-					value={asString(
-						(field.validation as { requiredMessage?: unknown } | undefined)?.requiredMessage
-					)}
+					value={asString(fieldGroupValue('validation', 'requiredMessage'))}
 					oninput={(event) =>
 						updateFieldValidation({
 							requiredMessage: (event.currentTarget as HTMLInputElement).value || undefined
@@ -654,8 +802,10 @@
 			<label>
 				{@render labelText('Relevance')}
 				<input
-					value={asString((field.logic as { relevance?: unknown } | undefined)?.relevance) ||
-						asString((field.odkBind as { relevant?: unknown } | undefined)?.relevant)}
+					value={firstString(
+						fieldGroupValue('logic', 'relevance'),
+						fieldGroupValue('odkBind', 'relevant')
+					)}
 					oninput={(event) =>
 						updateFieldLogic({
 							relevance: textExpression((event.currentTarget as HTMLInputElement).value)
@@ -665,8 +815,10 @@
 			<label>
 				{@render labelText('Calculate')}
 				<input
-					value={asString((field.logic as { calculation?: unknown } | undefined)?.calculation) ||
-						asString((field.odkBind as { calculation?: unknown } | undefined)?.calculation)}
+					value={firstString(
+						fieldGroupValue('logic', 'calculation'),
+						fieldGroupValue('odkBind', 'calculation')
+					)}
 					oninput={(event) =>
 						updateFieldLogic({
 							calculation: textExpression((event.currentTarget as HTMLInputElement).value)
@@ -676,8 +828,10 @@
 			<label>
 				{@render labelText('Trigger')}
 				<input
-					value={asString((field.logic as { trigger?: unknown } | undefined)?.trigger) ||
-						asString((field.odkBind as { trigger?: unknown } | undefined)?.trigger)}
+					value={firstString(
+						fieldGroupValue('logic', 'trigger'),
+						fieldGroupValue('odkBind', 'trigger')
+					)}
 					oninput={(event) =>
 						updateFieldLogic({
 							trigger: (event.currentTarget as HTMLInputElement).value || undefined
@@ -687,8 +841,10 @@
 			<label>
 				{@render labelText('Constraint')}
 				<input
-					value={asString((field.logic as { constraint?: unknown } | undefined)?.constraint) ||
-						asString((field.odkBind as { constraint?: unknown } | undefined)?.constraint)}
+					value={firstString(
+						fieldGroupValue('logic', 'constraint'),
+						fieldGroupValue('odkBind', 'constraint')
+					)}
 					oninput={(event) =>
 						updateFieldLogic({
 							constraint: textExpression((event.currentTarget as HTMLInputElement).value)
@@ -698,12 +854,10 @@
 			<label>
 				{@render labelText('Constraint message')}
 				<input
-					value={asString(
-						(field.logic as { constraintMessage?: unknown } | undefined)?.constraintMessage
-					) ||
-						asString(
-							(field.odkBind as { constraintMessage?: unknown } | undefined)?.constraintMessage
-						)}
+					value={firstString(
+						fieldGroupValue('logic', 'constraintMessage'),
+						fieldGroupValue('odkBind', 'constraintMessage')
+					)}
 					oninput={(event) =>
 						updateFieldLogic({
 							constraintMessage: (event.currentTarget as HTMLInputElement).value || undefined
@@ -713,8 +867,7 @@
 			<label>
 				{@render labelText('Appearance')}
 				<input
-					value={asString(field.appearance) ||
-						asString((field.odkBind as { appearance?: unknown } | undefined)?.appearance)}
+					value={firstString(field.appearance, fieldGroupValue('odkBind', 'appearance'))}
 					oninput={(event) =>
 						updateField({
 							appearance: (event.currentTarget as HTMLInputElement).value || undefined
@@ -725,9 +878,10 @@
 				<label>
 					{@render labelText('Choice filter')}
 					<input
-						value={asString(
-							(field.logic as { choiceFilter?: unknown } | undefined)?.choiceFilter
-						) || asString((field.odkBind as { choiceFilter?: unknown } | undefined)?.choiceFilter)}
+						value={firstString(
+							fieldGroupValue('logic', 'choiceFilter'),
+							fieldGroupValue('odkBind', 'choiceFilter')
+						)}
 						oninput={(event) =>
 							updateFieldLogic({
 								choiceFilter: (event.currentTarget as HTMLInputElement).value || undefined
@@ -737,9 +891,7 @@
 				<label>
 					<input
 						type="checkbox"
-						checked={Boolean(
-							(field.odkBind as { randomizeChoices?: unknown } | undefined)?.randomizeChoices
-						)}
+						checked={Boolean(fieldGroupValue('odkBind', 'randomizeChoices'))}
 						onchange={(event) =>
 							updateFieldLogic({
 								randomizeChoices: (event.currentTarget as HTMLInputElement).checked
@@ -750,9 +902,7 @@
 				<label>
 					{@render labelText('Randomization seed')}
 					<input
-						value={asString(
-							(field.odkBind as { randomizeSeed?: unknown } | undefined)?.randomizeSeed
-						)}
+						value={asString(fieldGroupValue('odkBind', 'randomizeSeed'))}
 						oninput={(event) =>
 							updateFieldLogic({
 								randomizeSeed: (event.currentTarget as HTMLInputElement).value || undefined
@@ -766,10 +916,10 @@
 					<input
 						type="number"
 						min="1"
-						value={asString(
-							(field.odkBind as { captureAccuracy?: unknown } | undefined)?.captureAccuracy
-						) ||
-							asString((field.input as { captureAccuracy?: unknown } | undefined)?.captureAccuracy)}
+						value={firstString(
+							fieldGroupValue('odkBind', 'captureAccuracy'),
+							fieldGroupValue('input', 'captureAccuracy')
+						)}
 						oninput={(event) =>
 							updateFieldInput({
 								captureAccuracy: (event.currentTarget as HTMLInputElement).value
@@ -783,10 +933,10 @@
 					<input
 						type="number"
 						min="1"
-						value={asString(
-							(field.odkBind as { warningAccuracy?: unknown } | undefined)?.warningAccuracy
-						) ||
-							asString((field.input as { warningAccuracy?: unknown } | undefined)?.warningAccuracy)}
+						value={firstString(
+							fieldGroupValue('odkBind', 'warningAccuracy'),
+							fieldGroupValue('input', 'warningAccuracy')
+						)}
 						oninput={(event) =>
 							updateFieldInput({
 								warningAccuracy: (event.currentTarget as HTMLInputElement).value
@@ -801,8 +951,10 @@
 					{@render labelText('Range start')}
 					<input
 						type="number"
-						value={asString((field.input as { rangeStart?: unknown } | undefined)?.rangeStart) ||
-							asString((field.odkBind as { rangeStart?: unknown } | undefined)?.rangeStart)}
+						value={firstString(
+							fieldGroupValue('input', 'rangeStart'),
+							fieldGroupValue('odkBind', 'rangeStart')
+						)}
 						oninput={(event) =>
 							updateFieldInput({
 								rangeStart: (event.currentTarget as HTMLInputElement).value
@@ -815,8 +967,10 @@
 					{@render labelText('Range end')}
 					<input
 						type="number"
-						value={asString((field.input as { rangeEnd?: unknown } | undefined)?.rangeEnd) ||
-							asString((field.odkBind as { rangeEnd?: unknown } | undefined)?.rangeEnd)}
+						value={firstString(
+							fieldGroupValue('input', 'rangeEnd'),
+							fieldGroupValue('odkBind', 'rangeEnd')
+						)}
 						oninput={(event) =>
 							updateFieldInput({
 								rangeEnd: (event.currentTarget as HTMLInputElement).value
@@ -831,8 +985,10 @@
 						type="number"
 						min="0"
 						step="any"
-						value={asString((field.input as { rangeStep?: unknown } | undefined)?.rangeStep) ||
-							asString((field.odkBind as { rangeStep?: unknown } | undefined)?.rangeStep)}
+						value={firstString(
+							fieldGroupValue('input', 'rangeStep'),
+							fieldGroupValue('odkBind', 'rangeStep')
+						)}
 						oninput={(event) =>
 							updateFieldInput({
 								rangeStep: (event.currentTarget as HTMLInputElement).value
@@ -848,8 +1004,10 @@
 					<input
 						type="number"
 						min="1"
-						value={asString((field.input as { maxPixels?: unknown } | undefined)?.maxPixels) ||
-							asString((field.odkBind as { maxPixels?: unknown } | undefined)?.maxPixels)}
+						value={firstString(
+							fieldGroupValue('input', 'maxPixels'),
+							fieldGroupValue('odkBind', 'maxPixels')
+						)}
 						oninput={(event) =>
 							updateFieldInput({
 								maxPixels: (event.currentTarget as HTMLInputElement).value
@@ -869,7 +1027,7 @@
 					<input
 						type="number"
 						min="0"
-						value={asString((field.validation as { minLength?: unknown } | undefined)?.minLength)}
+						value={asString(fieldGroupValue('validation', 'minLength'))}
 						oninput={(event) =>
 							updateFieldValidation({
 								minLength: (event.currentTarget as HTMLInputElement).value
@@ -883,7 +1041,7 @@
 					<input
 						type="number"
 						min="1"
-						value={asString((field.validation as { maxLength?: unknown } | undefined)?.maxLength)}
+						value={asString(fieldGroupValue('validation', 'maxLength'))}
 						oninput={(event) =>
 							updateFieldValidation({
 								maxLength: (event.currentTarget as HTMLInputElement).value
@@ -897,7 +1055,7 @@
 				{@render labelText('Min')}
 				<input
 					type="number"
-					value={asString((field.validation as { min?: unknown } | undefined)?.min)}
+					value={asString(fieldGroupValue('validation', 'min'))}
 					oninput={(event) =>
 						updateFieldValidation({
 							min: (event.currentTarget as HTMLInputElement).value
@@ -910,7 +1068,7 @@
 				{@render labelText('Max')}
 				<input
 					type="number"
-					value={asString((field.validation as { max?: unknown } | undefined)?.max)}
+					value={asString(fieldGroupValue('validation', 'max'))}
 					oninput={(event) =>
 						updateFieldValidation({
 							max: (event.currentTarget as HTMLInputElement).value
@@ -922,7 +1080,7 @@
 			<label>
 				{@render labelText('Pattern')}
 				<input
-					value={asString((field.validation as { pattern?: unknown } | undefined)?.pattern)}
+					value={asString(fieldGroupValue('validation', 'pattern'))}
 					oninput={(event) =>
 						updateFieldValidation({
 							pattern: (event.currentTarget as HTMLInputElement).value || undefined
@@ -934,8 +1092,10 @@
 					{@render labelText('Entry mask')}
 					<input
 						placeholder="##-##-######"
-						value={asString((field.input as { mask?: unknown } | undefined)?.mask) ||
-							asString((field.validation as { inputMask?: unknown } | undefined)?.inputMask)}
+						value={firstString(
+							fieldGroupValue('input', 'mask'),
+							fieldGroupValue('validation', 'inputMask')
+						)}
 						oninput={(event) =>
 							updateFieldInput({
 								mask: (event.currentTarget as HTMLInputElement).value || undefined
@@ -945,9 +1105,10 @@
 				<label>
 					{@render labelText('Text case')}
 					<select
-						value={asString(
-							(field.validation as { textTransform?: unknown } | undefined)?.textTransform
-						) || asString((field.input as { textTransform?: unknown } | undefined)?.textTransform)}
+						value={firstString(
+							fieldGroupValue('validation', 'textTransform'),
+							fieldGroupValue('input', 'textTransform')
+						)}
 						onchange={(event) =>
 							updateFieldInput({
 								textTransform: (event.currentTarget as HTMLSelectElement).value || undefined
@@ -1043,11 +1204,70 @@
 		{/if}
 
 		<h3>SNOMED CT Coding</h3>
+		<div class="snomed-picker">
+			<div class="snomed-search-row">
+				<label class="snomed-search-label">
+					{@render labelText('Search SNOMED CT')}
+					<input
+						value={snomedQuery}
+						placeholder="Search by term or concept ID"
+						oninput={(event) => (snomedQuery = (event.currentTarget as HTMLInputElement).value)}
+						onkeydown={(event) => {
+							if (event.key === 'Enter') {
+								event.preventDefault();
+								void searchSnomed();
+							}
+						}}
+					/>
+				</label>
+				<button
+					type="button"
+					class="secondary-action"
+					disabled={snomedStatus === 'loading'}
+					onclick={() => void searchSnomed()}
+				>
+					{snomedStatus === 'loading' ? 'Searching...' : 'Search'}
+				</button>
+				{#if currentSnomedConceptId()}
+					<button type="button" class="secondary-action" onclick={clearSnomed}>Clear</button>
+				{/if}
+			</div>
+			<div class="snomed-actions">
+				{#if snomedBrowserUrl}
+					<a href={resolve(snomedBrowserUrl as any)} target="_blank" rel="noreferrer">
+						Open SNOMED browser
+					</a>
+				{/if}
+			</div>
+			{#if snomedError}
+				<p class:error={snomedStatus === 'error'} class:muted={snomedStatus !== 'error'}>
+					{snomedError}
+				</p>
+			{/if}
+			{#if snomedResults.length}
+				<div class="snomed-results" aria-live="polite">
+					{#each snomedResults as concept (concept.conceptId)}
+						<button type="button" class="snomed-result" onclick={() => selectSnomed(concept)}>
+							<span>
+								<strong>{concept.preferredTerm}</strong>
+								{#if concept.semanticTag}
+									<small>{concept.semanticTag}</small>
+								{/if}
+							</span>
+							<span class="snomed-code">{concept.conceptId}</span>
+							{#if concept.fullySpecifiedName}
+								<small>{concept.fullySpecifiedName}</small>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
 		<div class="property-grid">
 			<label>
 				{@render labelText('Concept ID')}
 				<input
-					value={asString((field.snomed as { conceptId?: unknown } | undefined)?.conceptId)}
+					value={asString(fieldGroupValue('snomed', 'conceptId'))}
 					oninput={(event) =>
 						updateSnomed({
 							conceptId: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1057,12 +1277,69 @@
 			<label>
 				{@render labelText('Preferred term')}
 				<input
-					value={asString((field.snomed as { preferredTerm?: unknown } | undefined)?.preferredTerm)}
+					value={asString(fieldGroupValue('snomed', 'preferredTerm'))}
 					oninput={(event) =>
 						updateSnomed({
 							preferredTerm: (event.currentTarget as HTMLInputElement).value || undefined
 						})}
 				/>
+			</label>
+			<label>
+				{@render labelText('Fully specified name')}
+				<input
+					value={asString(fieldGroupValue('snomed', 'fullySpecifiedName'))}
+					oninput={(event) =>
+						updateSnomed({
+							fullySpecifiedName: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Semantic tag')}
+				<input
+					value={asString(fieldGroupValue('snomed', 'semanticTag'))}
+					oninput={(event) =>
+						updateSnomed({
+							semanticTag: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Edition')}
+				<input
+					value={asString(fieldGroupValue('snomed', 'edition'))}
+					oninput={(event) =>
+						updateSnomed({
+							edition: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Terminology version')}
+				<input
+					value={asString(fieldGroupValue('snomed', 'version'))}
+					oninput={(event) =>
+						updateSnomed({
+							version: (event.currentTarget as HTMLInputElement).value || undefined
+						})}
+				/>
+			</label>
+			<label>
+				{@render labelText('Binding strength')}
+				<select
+					value={asString(fieldGroupValue('snomed', 'bindingStrength'))}
+					onchange={(event) =>
+						updateSnomed({
+							bindingStrength: (event.currentTarget as HTMLSelectElement).value || undefined
+						})}
+				>
+					<option value="">Unspecified</option>
+					<option value="unreviewed">Unreviewed</option>
+					<option value="exact">Exact</option>
+					<option value="narrower">Narrower</option>
+					<option value="broader">Broader</option>
+					<option value="related">Related</option>
+				</select>
 			</label>
 		</div>
 
@@ -1071,9 +1348,7 @@
 			<label>
 				{@render labelText('Web Template path')}
 				<input
-					value={asString(
-						(field.openEhrMapping as { webTemplatePath?: unknown } | undefined)?.webTemplatePath
-					)}
+					value={asString(fieldGroupValue('openEhrMapping', 'webTemplatePath'))}
 					oninput={(event) =>
 						updateFieldOpenEhrMapping({
 							webTemplatePath: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1083,9 +1358,7 @@
 			<label>
 				{@render labelText('Archetype ID')}
 				<input
-					value={asString(
-						(field.openEhrMapping as { archetypeId?: unknown } | undefined)?.archetypeId
-					)}
+					value={asString(fieldGroupValue('openEhrMapping', 'archetypeId'))}
 					oninput={(event) =>
 						updateFieldOpenEhrMapping({
 							archetypeId: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1095,9 +1368,7 @@
 			<label>
 				{@render labelText('Archetype path')}
 				<input
-					value={asString(
-						(field.openEhrMapping as { archetypePath?: unknown } | undefined)?.archetypePath
-					)}
+					value={asString(fieldGroupValue('openEhrMapping', 'archetypePath'))}
 					oninput={(event) =>
 						updateFieldOpenEhrMapping({
 							archetypePath: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1107,9 +1378,7 @@
 			<label>
 				{@render labelText('Template ID')}
 				<input
-					value={asString(
-						(field.openEhrMapping as { templateId?: unknown } | undefined)?.templateId
-					)}
+					value={asString(fieldGroupValue('openEhrMapping', 'templateId'))}
 					oninput={(event) =>
 						updateFieldOpenEhrMapping({
 							templateId: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1119,9 +1388,7 @@
 			<label>
 				{@render labelText('Template path')}
 				<input
-					value={asString(
-						(field.openEhrMapping as { templatePath?: unknown } | undefined)?.templatePath
-					)}
+					value={asString(fieldGroupValue('openEhrMapping', 'templatePath'))}
 					oninput={(event) =>
 						updateFieldOpenEhrMapping({
 							templatePath: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1131,7 +1398,7 @@
 			<label>
 				{@render labelText('RM type')}
 				<input
-					value={asString((field.openEhrMapping as { rmType?: unknown } | undefined)?.rmType)}
+					value={asString(fieldGroupValue('openEhrMapping', 'rmType'))}
 					oninput={(event) =>
 						updateFieldOpenEhrMapping({
 							rmType: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1141,9 +1408,7 @@
 			<label>
 				{@render labelText('Data value type')}
 				<input
-					value={asString(
-						(field.openEhrMapping as { dataValueType?: unknown } | undefined)?.dataValueType
-					)}
+					value={asString(fieldGroupValue('openEhrMapping', 'dataValueType'))}
 					oninput={(event) =>
 						updateFieldOpenEhrMapping({
 							dataValueType: (event.currentTarget as HTMLInputElement).value || undefined
@@ -1315,6 +1580,68 @@
 	.option-coding label {
 		margin-top: 0.45rem;
 	}
+	.snomed-picker {
+		display: grid;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+		padding: 0.65rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.45rem;
+		background: var(--color-surface-muted, #f6f7f9);
+	}
+	.snomed-search-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		gap: 0.5rem;
+		align-items: end;
+	}
+	.snomed-search-label {
+		min-width: 0;
+	}
+	.snomed-actions {
+		min-height: 1rem;
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
+	.snomed-actions a {
+		color: var(--color-rpc-teal);
+		text-decoration: none;
+	}
+	.secondary-action {
+		border-color: var(--color-border-strong);
+		background: #eef2f7;
+		color: var(--color-rpc-navy);
+	}
+	.snomed-results {
+		display: grid;
+		gap: 0.4rem;
+	}
+	.snomed-result {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.2rem 0.6rem;
+		width: 100%;
+		padding: 0.55rem;
+		border-color: var(--color-border-strong);
+		background: #fff;
+		color: var(--color-text);
+		text-align: left;
+	}
+	.snomed-result strong,
+	.snomed-result small {
+		display: block;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.snomed-result small {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+	}
+	.snomed-code {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
 	.advanced-group {
 		margin-top: 1rem;
 		padding-top: 0.8rem;
@@ -1340,6 +1667,9 @@
 			grid-template-columns: 1fr;
 		}
 		.option-row {
+			grid-template-columns: 1fr;
+		}
+		.snomed-search-row {
 			grid-template-columns: 1fr;
 		}
 	}

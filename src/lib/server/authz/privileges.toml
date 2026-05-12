@@ -173,6 +173,18 @@ roles = ["admin", "barcode_print_manager"]
 resource = "system"
 audit = true
 
+[privileges."emr.template.manage"]
+description = "Manage reusable openEHR template registry, Web Template cache, and runtime manifests"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = true
+
+[privileges."terminology.view"]
+description = "Search and inspect configured clinical terminology concepts"
+roles = ["admin", "barcode_print_manager"]
+resource = "system"
+audit = false
+
 [privileges."emr.clinical_note.submit"]
 description = "Submit an EMR clinical note for an allocated PEC encounter"
 roles = ["admin", "barcode_print_manager"]
