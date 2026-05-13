@@ -1,4 +1,4 @@
-import { AppError, notFound } from '$lib/server/observability/errors';
+import { AppError, isAppError, notFound } from '$lib/server/observability/errors';
 import { ehrbaseClient, type EhrbaseClient } from './ehrbase.client';
 import { OpenEhrTemplateRepository } from './open-ehr-template.repository';
 import {
@@ -91,12 +91,28 @@ export class OpenEhrTemplateService {
 		operationalTemplateXml: string;
 		userId?: string;
 	}): Promise<OpenEhrTemplateSyncResult> {
-		const upload = await this.client.uploadOperationalTemplate(input.operationalTemplateXml);
-		return this.syncTemplateFromCdr({
-			templateId: upload.templateId,
-			operationalTemplateXml: input.operationalTemplateXml,
-			userId: input.userId
-		});
+		try {
+			const upload = await this.client.uploadOperationalTemplate(input.operationalTemplateXml);
+			return this.syncTemplateFromCdr({
+				templateId: upload.templateId,
+				operationalTemplateXml: input.operationalTemplateXml,
+				userId: input.userId
+			});
+		} catch (error) {
+			const templateId = extractAdl14TemplateId(input.operationalTemplateXml);
+			if (isAppError(error) && error.code === 'EHRBASE_TEMPLATE_UPLOAD_FAILED' && templateId) {
+				try {
+					return await this.syncTemplateFromCdr({
+						templateId,
+						operationalTemplateXml: input.operationalTemplateXml,
+						userId: input.userId
+					});
+				} catch {
+					throw error;
+				}
+			}
+			throw error;
+		}
 	}
 
 	async syncTemplateFromCdr(input: SyncTemplateInput): Promise<OpenEhrTemplateSyncResult> {
@@ -182,6 +198,21 @@ export class OpenEhrTemplateService {
 }
 
 export const openEhrTemplateService = new OpenEhrTemplateService();
+
+function decodeXmlEntities(value: string) {
+	return value
+		.replaceAll('&lt;', '<')
+		.replaceAll('&gt;', '>')
+		.replaceAll('&quot;', '"')
+		.replaceAll('&apos;', "'")
+		.replaceAll('&amp;', '&');
+}
+
+function extractAdl14TemplateId(templateXml: string) {
+	const match = templateXml.match(/<template_id\b[^>]*>\s*<value\b[^>]*>([^<]+)<\/value>/i);
+	const value = match?.[1]?.trim();
+	return value ? decodeXmlEntities(value) : undefined;
+}
 
 function buildRuntimeManifest(
 	template: OpenEhrTemplateRecord,

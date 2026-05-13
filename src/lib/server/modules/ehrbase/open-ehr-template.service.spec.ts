@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AppError } from '$lib/server/observability/errors';
 import { OpenEhrTemplateService } from './open-ehr-template.service';
 
 describe('OpenEhrTemplateService', () => {
@@ -75,6 +76,76 @@ describe('OpenEhrTemplateService', () => {
 					templateId: 'IDCR Medication List.v0'
 				}),
 				fetchedBy: 'dev-admin'
+			})
+		);
+	});
+
+	it('syncs and caches an OPT when EHRbase rejects upload because it is already present', async () => {
+		const repository = {
+			upsertTemplate: vi.fn().mockResolvedValue({
+				id: 'template-row-1',
+				templateId: 'IDCR Medication List.v0',
+				cdrTemplateId: 'IDCR Medication List.v0'
+			}),
+			upsertWebTemplateCache: vi.fn().mockResolvedValue({
+				id: 'web-template-row-1',
+				templateId: 'template-row-1',
+				webTemplateHash: 'hash'
+			})
+		};
+		const client = {
+			uploadOperationalTemplate: vi
+				.fn()
+				.mockRejectedValue(
+					new AppError(
+						'EHRBASE_TEMPLATE_UPLOAD_FAILED',
+						'Clinical data repository rejected the template.',
+						502,
+						{ status: 409, responseBodyHash: 'a'.repeat(64) }
+					)
+				),
+			listTemplates: vi.fn().mockResolvedValue([
+				{
+					template_id: 'IDCR Medication List.v0',
+					concept: 'IDCR Medication List.v0',
+					archetype_id: 'openEHR-EHR-COMPOSITION.care_summary.v0'
+				}
+			]),
+			getWebTemplate: vi.fn().mockResolvedValue({
+				templateId: 'IDCR Medication List.v0',
+				tree: {
+					id: 'current_medication_list',
+					rmType: 'COMPOSITION'
+				}
+			})
+		};
+		const service = new OpenEhrTemplateService(repository as never, client as never);
+
+		await expect(
+			service.uploadAndCacheAdl14Template({
+				operationalTemplateXml: `
+					<template>
+						<template_id>
+							<value>IDCR Medication List.v0</value>
+						</template_id>
+					</template>
+				`,
+				userId: 'dev-admin'
+			})
+		).resolves.toMatchObject({
+			template: {
+				id: 'template-row-1'
+			},
+			webTemplateCache: {
+				id: 'web-template-row-1'
+			}
+		});
+
+		expect(client.getWebTemplate).toHaveBeenCalledWith('IDCR Medication List.v0');
+		expect(repository.upsertTemplate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				templateId: 'IDCR Medication List.v0',
+				operationalTemplateHash: expect.stringMatching(/^[a-f0-9]{64}$/)
 			})
 		);
 	});
