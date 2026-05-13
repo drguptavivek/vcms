@@ -142,4 +142,35 @@ describe('EhrCompositionService', () => {
 		expect(client.createEhr).not.toHaveBeenCalled();
 		expect(client.submitFlatComposition).not.toHaveBeenCalled();
 	});
+
+	it('rejects submissions that do not contain FLAT Web Template paths', async () => {
+		const service = new EhrCompositionService(client as never);
+
+		await expect(
+			service.submitRuntimeComposition({
+				patient: patient as never,
+				occurredAt: new Date('2026-05-11T08:30:00.000Z'),
+				note: {
+					payload: {
+						openEhr: {
+							templateId: 'vcms-pec-opd.v1',
+							flat: {
+								chiefComplaint: 'Blurred vision'
+							}
+						}
+					}
+				},
+				userId: 'user-1',
+				patientRepository: patientRepository as never
+			})
+		).rejects.toMatchObject({
+			code: 'OPENEHR_FLAT_PAYLOAD_REQUIRED',
+			status: 409,
+			details: { templateId: 'vcms-pec-opd.v1' }
+		} satisfies Partial<AppError>);
+
+		expect(client.createEhr).not.toHaveBeenCalled();
+		expect(patientRepository.updateOpenEhrIdentity).not.toHaveBeenCalled();
+		expect(client.submitFlatComposition).not.toHaveBeenCalled();
+	});
 });

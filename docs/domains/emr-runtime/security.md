@@ -62,4 +62,5 @@ The route contract is pinned by `src/routes/api/v1/emr-runtime.route-contract.sp
 - PEC-scoped mutations use `resource: (body) => ({ type: 'pec', id: ... })` where the request body carries a PEC identifier.
 - `care_pathway.create` is currently system-scoped because its request body identifies patient and encounter, not PEC. The service validates the encounter belongs to the patient before creating the pathway and writes a patient-resource audit entry.
 - Mobile note submission stores idempotency state by user and idempotency key. Replays with the same payload return the stored success result; key reuse with a different payload returns a conflict.
-- Clinical payloads are stored as note JSON by the clinical note service. Route and error logs should continue to avoid logging full payloads outside explicit audit metadata.
+- Runtime clinical payload bodies are committed to EHRbase before local note version rows are written. Local note versions store only the accepted openEHR reference plus local and FLAT payload hashes.
+- CDR error responses must be normalized before returning through runtime APIs. API clients may receive the safe error code, status, and a response-body hash for support correlation, but not raw EHRbase rejection bodies.

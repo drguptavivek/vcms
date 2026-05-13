@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { conflict, notFound } from '$lib/server/observability/errors';
+import { AppError, conflict, notFound } from '$lib/server/observability/errors';
 import { ClinicalNoteService } from './clinical-note.service';
 
 const audit = vi.hoisted(() => ({ writeAudit: vi.fn() }));
@@ -715,5 +715,88 @@ describe('ClinicalNoteService', () => {
 				})
 			})
 		);
+	});
+
+	it('does not create local note versions when EHRbase rejects the runtime Composition', async () => {
+		const service = new ClinicalNoteService(
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			clinicalWorklistService as never,
+			runInTransactionMock([{ id: 4, active: true }] as never) as never,
+			runtimeCompositionService as never
+		);
+		runtimeCompositionService.submitRuntimeComposition.mockRejectedValue(
+			new AppError(
+				'EHRBASE_COMPOSITION_REJECTED',
+				'Clinical data repository rejected the Composition.',
+				502,
+				{ status: 400, responseBodyHash: 'a'.repeat(64) }
+			)
+		);
+		patientRepository.findByBarcode.mockResolvedValue(undefined);
+		patientRepository.createForBarcode.mockResolvedValue({
+			id: 'patient-1',
+			barcode: '01-26-000001',
+			fullName: 'Asha Devi'
+		} as never);
+		encounterRepository.create.mockResolvedValue({
+			id: 'encounter-1',
+			patientId: 'patient-1',
+			pecId: 4,
+			barcodeSnapshot: '01-26-000001'
+		} as never);
+		carePathwayRepository.create.mockResolvedValue({
+			id: 'pathway-1',
+			patientId: 'patient-1',
+			encounterId: 'encounter-1'
+		} as never);
+
+		await expect(
+			service.submitPecOpdNote({
+				body: {
+					...baseInput,
+					note: {
+						chiefComplaint: 'Blurred vision',
+						payload: {
+							openEhr: {
+								templateId: 'vcms-pec-opd.v1',
+								flat: { 'pec_opd/chief_complaint': 'Blurred vision' }
+							}
+						}
+					}
+				},
+				userId: 'user-1',
+				requestId: 'req-ehrbase-fail'
+			})
+		).rejects.toMatchObject({
+			code: 'EHRBASE_COMPOSITION_REJECTED',
+			message: 'Clinical data repository rejected the Composition.',
+			details: {
+				status: 400,
+				responseBodyHash: 'a'.repeat(64)
+			}
+		});
+
+		expect(runtimeCompositionService.submitRuntimeComposition).toHaveBeenCalledWith(
+			expect.objectContaining({
+				patient: expect.objectContaining({ id: 'patient-1' }),
+				patientRepository,
+				note: expect.objectContaining({
+					payload: {
+						openEhr: {
+							templateId: 'vcms-pec-opd.v1',
+							flat: { 'pec_opd/chief_complaint': 'Blurred vision' }
+						}
+					}
+				})
+			})
+		);
+		expect(clinicalNoteRepository.findLatestByEncounterAndType).not.toHaveBeenCalled();
+		expect(clinicalNoteRepository.create).not.toHaveBeenCalled();
+		expect(clinicalNoteRepository.createVersion).not.toHaveBeenCalled();
+		expect(clinicalWorklistService.createFromPecSubmission).not.toHaveBeenCalled();
+		expect(audit.writeAudit).not.toHaveBeenCalled();
 	});
 });

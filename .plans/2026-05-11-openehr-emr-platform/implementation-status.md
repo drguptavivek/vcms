@@ -38,6 +38,7 @@ The current VCMS EMR Builder is still a form-oriented editor and must evolve int
 - Patient rows now carry linked `ehr_id` and subject identity metadata.
 - Clinical note versions now store openEHR Composition references and payload hashes rather than the local clinical payload body.
 - PEC OPD runtime submission now calls the EHRbase composition bridge before writing the local operational note version.
+- EHRbase rejection details are normalized for runtime API safety. Raw CDR response bodies are not exposed; safe details include upstream status and a response-body hash for correlation.
 - Generic `openehr_templates` registry added for CDR template metadata, hashes, status, archetype IDs, and Web Template root IDs.
 - Generic `openehr_web_template_caches` table added for cached Web Template JSON and hash.
 - `OpenEhrTemplateService` added to upload/sync ADL 1.4 templates and cache Web Templates through EHRbase.
@@ -75,8 +76,8 @@ The current VCMS EMR Builder is still a form-oriented editor and must evolve int
 
 - EHRbase bridge service: client surface now covers template list/upload, Web Template fetch, EHR creation, FLAT Composition submission, and AQL execution.
 - Patient-to-`ehr_id` linkage: stored on `patients`; dedicated link table remains future work.
-- Composition submission service: validates template/payload presence and stores local references.
-- Runtime form submission to EHRbase: wired for PEC OPD clinical note submission.
+- Composition submission service: validates template/payload presence, submits FLAT payloads, and stores local references only after CDR acceptance.
+- Runtime form submission to EHRbase: wired for PEC OPD clinical note submission with tests covering payload mapping, missing template, missing FLAT paths, and safe CDR rejection handling.
 - Data Dictionary persistence model: field/option-set/fragment assets exist; deeper openEHR archetype/template binding workflow remains future work.
 - Template registry: persistence, service foundation, management API, runtime manifest API, and initial admin UI implemented; full governance workflow remains future work.
 - AQL query service: low-level client method plus first curated query registry/API implemented.

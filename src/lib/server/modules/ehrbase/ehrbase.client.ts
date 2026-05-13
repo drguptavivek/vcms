@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { createHash } from 'node:crypto';
 import { AppError } from '$lib/server/observability/errors';
 import type {
 	EhrbaseAqlRequest,
@@ -37,10 +38,12 @@ function ehrbaseAuthorizationHeader() {
 
 function safeResponseDetail(status: number, body: string) {
 	const trimmed = body.trim();
-	return {
-		status,
-		message: trimmed.slice(0, 500)
-	};
+	return trimmed
+		? {
+				status,
+				responseBodyHash: createHash('sha256').update(trimmed).digest('hex')
+			}
+		: { status };
 }
 
 function extractEhrId(payload: unknown, location: string | null): string | undefined {

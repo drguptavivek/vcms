@@ -163,6 +163,36 @@ describe('EhrbaseClient', () => {
 		);
 	});
 
+	it('does not expose raw EHRbase response bodies when a Composition is rejected', async () => {
+		const fetcher = vi.fn().mockResolvedValue(
+			response(
+				{
+					error: 'template path /secret/internal/path failed validation for patient 123'
+				},
+				{ status: 400 }
+			)
+		);
+		const client = new EhrbaseClient(fetcher as never);
+
+		await expect(
+			client.submitFlatComposition({
+				ehrId: 'ehr-1',
+				templateId: 'vcms-pec-opd.v1',
+				committerName: 'Doctor',
+				committerId: 'user-1',
+				payload: { 'pec_opd/chief_complaint': 'Blurred vision' }
+			})
+		).rejects.toMatchObject({
+			code: 'EHRBASE_COMPOSITION_REJECTED',
+			status: 502,
+			message: 'Clinical data repository rejected the Composition.',
+			details: {
+				status: 400,
+				responseBodyHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+			}
+		});
+	});
+
 	it('executes AQL queries through the openEHR query endpoint', async () => {
 		const fetcher = vi.fn().mockResolvedValue(
 			response({

@@ -91,6 +91,8 @@ The service adds standard Composition context defaults when absent:
 
 After EHRbase accepts the Composition, local note versions store only the openEHR reference and payload hashes. Clinical source data must be read from EHRbase by Composition UID/AQL, not from local workflow tables.
 
+If EHRbase rejects the Composition or is unavailable, the runtime API returns a stable VCMS error code and message. Raw CDR response bodies are not returned to clients; the error details may include the upstream status and a response-body hash for operator correlation.
+
 Local development has two seeded users after `npm run seed`:
 
 - `admin@example.test / ChangeMe123!`
