@@ -2,7 +2,7 @@
 title: EMR Builder Testing Blueprint
 status: draft
 owner: engineering
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-13
 ---
 
 # EMR Builder Testing Blueprint
@@ -81,6 +81,34 @@ Recommended test targets in `tests/components/emr-builder/`:
 Builder route tests must prove validation, authentication, AuthZ, rate limits, safe errors, request IDs, and audit side effects.
 
 Dictionary route tests must additionally prove that field, option-set, and fragment assets stay behind `emr.dictionary.manage`, use mutation limits for save/publish/retire, and never copy full clinical payloads into audit logs.
+
+## Local Playwright Browser Setup
+
+`npm run test:e2e` must not install browsers implicitly. Browser downloads can hang in restricted or slow local environments, so setup is explicit and the E2E gate performs a fast preflight check before starting Playwright.
+
+Use this one-time setup command on a machine that has network access:
+
+```bash
+npm run test:e2e:install
+```
+
+Then run:
+
+```bash
+npm run test:e2e
+```
+
+The E2E preflight checks that the Chromium executable expected by Playwright is present and executable. It also checks that the preview server can bind to the configured local host and port. If either check fails, the command fails quickly with the expected browser path or host/port and setup guidance instead of running `playwright install` inside the test command.
+
+For offline or restricted networks, pre-populate a Playwright browser cache and set `PLAYWRIGHT_BROWSERS_PATH` before running `npm run test:e2e`.
+
+The default preview address is `127.0.0.1:4173`. To change it, set `PLAYWRIGHT_HOST` and `PLAYWRIGHT_PORT`. If a sandbox forbids local listener sockets, run E2E outside that sandbox.
+
+To check browser availability without running E2E tests:
+
+```bash
+npm run test:e2e:check
+```
 
 ## Playwright Drag Interaction Guidance
 

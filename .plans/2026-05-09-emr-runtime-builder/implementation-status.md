@@ -2,7 +2,7 @@
 title: Runtime-First EMR And Dedicated EMR Builder Implementation Status
 status: draft
 owner: engineering
-last_reviewed: 2026-05-09
+last_reviewed: 2026-05-13
 plan_date: 2026-05-09
 implementation_status: planning
 ---
@@ -51,4 +51,4 @@ Architecture planning documentation has been created for a runtime-first EMR and
 
 - Finalize mobile API/error/conflict contract with security subagent review before implementation.
 - Confirm encrypted draft and key-management approach before code handoff.
-Before code starts, create or claim Beads issues for the runtime data model, runtime service/API surface, builder definition model, and security review. The first implementation pass should prove barcode uniqueness and immutable signed notes with tests before expanding UI workflows.
+  Before code starts, create or claim Beads issues for the runtime data model, runtime service/API surface, builder definition model, and security review. The first implementation pass should prove barcode uniqueness and immutable signed notes with tests before expanding UI workflows.
